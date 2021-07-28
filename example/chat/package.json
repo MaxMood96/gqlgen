@@ -14,7 +14,7 @@
     "react-dom": "^16.6.3",
     "react-scripts": "^2.1.1",
     "styled-components": "^5.2.0",
-    "subscriptions-transport-ws": "^0.9.5"
+    "subscriptions-transport-ws": "^0.10.0"
   },
   "scripts": {
     "start": "react-scripts start",
