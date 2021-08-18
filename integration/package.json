@@ -1,6 +1,8 @@
 {
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "prepublish": "npm run snyk-protect",
+    "snyk-protect": "snyk-protect"
   },
   "devDependencies": {
     "@babel/core": "^7.11.4",
@@ -11,14 +13,16 @@
     "apollo-link-ws": "^1.0.20",
     "babel-jest": "^24.9.0",
     "graphql": "^14.7.0",
-    "graphql-cli": "^3.0.14",
+    "graphql-cli": "^4.0.0",
     "graphql-tag": "^2.11.0",
     "jest": "^24.9.0",
-    "node-fetch": "^2.6.0",
+    "node-fetch": "^2.6.1",
     "subscriptions-transport-ws": "^0.9.18",
-    "ws": "^7.3.1"
+    "ws": "^7.4.6"
   },
   "dependencies": {
-    "@babel/preset-env": "^7.11.0"
-  }
+    "@babel/preset-env": "^7.11.0",
+    "@snyk/protect": "latest"
+  },
+  "snyk": true
 }
