@@ -3,7 +3,7 @@
     "test": "jest"
   },
   "devDependencies": {
-    "@babel/core": "^7.11.4",
+    "@babel/core": "^7.14.8",
     "apollo-cache-inmemory": "^1.6.6",
     "apollo-client": "^2.6.10",
     "apollo-link-http": "^1.5.17",
@@ -19,6 +19,6 @@
     "ws": "^7.4.6"
   },
   "dependencies": {
-    "@babel/preset-env": "^7.11.0"
+    "@babel/preset-env": "^7.14.8"
   }
 }
