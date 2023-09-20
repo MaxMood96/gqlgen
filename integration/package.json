@@ -12,7 +12,7 @@
     "apollo-link-persisted-queries": "^0.2.2",
     "apollo-link-ws": "^1.0.20",
     "babel-jest": "^24.9.0",
-    "graphql": "^16.3.0",
+    "graphql": "^16.8.1",
     "graphql-tag": "^2.12.6",
     "jest": "^29.0.3",
     "node-fetch": "^2.6.7",
