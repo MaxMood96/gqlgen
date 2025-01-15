@@ -28,6 +28,8 @@ response. Supported transports are:
  - GET
  - JSON POST
  - Multipart form
+ - UrlEncoded form
+ - GRAPHQL
  - Websockets
 
 new usage looks like this
@@ -41,6 +43,8 @@ srv.AddTransport(transport.Options{})
 srv.AddTransport(transport.GET{})
 srv.AddTransport(transport.POST{})
 srv.AddTransport(transport.MultipartForm{})
+srv.AddTransport(transport.UrlEncodedForm{})
+srv.AddTransport(transport.GRAPHQL{})
 ```
 
 ### New handler extension API
@@ -98,13 +102,6 @@ srv.Use(extension.AutomaticPersistedQuery{
 	Cache: lru.New(100),
 })
 srv.Use(apollotracing.Tracer{})
-```
-
-### Default server
-
-We provide a set of default extensions and transports if you aren't ready to customize them yet. Simply:
-```go
-handler.NewDefaultServer(es)
 ```
 
 ### More consistent naming

@@ -5,8 +5,9 @@ import (
 	"encoding/base64"
 	"fmt"
 
-	"github.com/99designs/gqlgen/graphql"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/99designs/gqlgen/graphql"
 )
 
 type (
@@ -41,7 +42,8 @@ func (Tracer) Validate(graphql.ExecutableSchema) error {
 }
 
 func (t *Tracer) shouldTrace(ctx context.Context) bool {
-	return graphql.GetOperationContext(ctx).Headers.Get("apollo-federation-include-trace") == "ftv1"
+	return graphql.HasOperationContext(ctx) &&
+		graphql.GetOperationContext(ctx).Headers.Get("apollo-federation-include-trace") == "ftv1"
 }
 
 func (t *Tracer) getTreeBuilder(ctx context.Context) *TreeBuilder {
@@ -65,7 +67,7 @@ func (t *Tracer) InterceptOperation(ctx context.Context, next graphql.OperationH
 
 // InterceptField is called on each field's resolution, including information about the path and parent node.
 // This information is then used to build the relevant Node Tree used in the FTV1 tracing format
-func (t *Tracer) InterceptField(ctx context.Context, next graphql.Resolver) (interface{}, error) {
+func (t *Tracer) InterceptField(ctx context.Context, next graphql.Resolver) (any, error) {
 	if !t.shouldTrace(ctx) {
 		return next(ctx)
 	}
@@ -83,9 +85,11 @@ func (t *Tracer) InterceptResponse(ctx context.Context, next graphql.ResponseHan
 		return next(ctx)
 	}
 	tb := t.getTreeBuilder(ctx)
-	if tb != nil {
-		tb.StartTimer(ctx)
+	if tb == nil {
+		return next(ctx)
 	}
+
+	tb.StartTimer(ctx)
 
 	val := new(string)
 	graphql.RegisterExtension(ctx, "ftv1", val)

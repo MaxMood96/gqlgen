@@ -8,12 +8,18 @@ import (
 	"strconv"
 )
 
+type MyMutation struct {
+}
+
+type MyQuery struct {
+}
+
 // Passed to createTodo to create a new todo
 type TodoInput struct {
 	// The body text
 	Text string `json:"text"`
 	// Is it done already?
-	Done *bool `json:"done"`
+	Done *bool `json:"done,omitempty"`
 }
 
 type Role string
@@ -40,7 +46,7 @@ func (e Role) String() string {
 	return string(e)
 }
 
-func (e *Role) UnmarshalGQL(v interface{}) error {
+func (e *Role) UnmarshalGQL(v any) error {
 	str, ok := v.(string)
 	if !ok {
 		return fmt.Errorf("enums must be strings")

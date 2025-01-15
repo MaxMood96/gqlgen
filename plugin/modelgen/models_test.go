@@ -2,22 +2,30 @@ package modelgen
 
 import (
 	"errors"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
 
-	"github.com/99designs/gqlgen/plugin/modelgen/out_struct_pointers"
-
-	"github.com/99designs/gqlgen/codegen/config"
-	"github.com/99designs/gqlgen/plugin/modelgen/out"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/99designs/gqlgen/codegen/config"
+	"github.com/99designs/gqlgen/graphql"
+	"github.com/99designs/gqlgen/plugin/modelgen/internal/extrafields"
+	"github.com/99designs/gqlgen/plugin/modelgen/out"
+	"github.com/99designs/gqlgen/plugin/modelgen/out_enable_model_json_omitempty_tag_false"
+	"github.com/99designs/gqlgen/plugin/modelgen/out_enable_model_json_omitempty_tag_nil"
+	"github.com/99designs/gqlgen/plugin/modelgen/out_enable_model_json_omitempty_tag_true"
+	"github.com/99designs/gqlgen/plugin/modelgen/out_nullable_input_omittable"
+	"github.com/99designs/gqlgen/plugin/modelgen/out_struct_pointers"
 )
 
 func TestModelGeneration(t *testing.T) {
@@ -40,6 +48,8 @@ func TestModelGeneration(t *testing.T) {
 	require.True(t, cfg.Models.UserDefined("EnumWithDescription"))
 	require.True(t, cfg.Models.UserDefined("InterfaceWithDescription"))
 	require.True(t, cfg.Models.UserDefined("UnionWithDescription"))
+	require.True(t, cfg.Models.UserDefined("RenameFieldTest"))
+	require.True(t, cfg.Models.UserDefined("ExtraFieldsTest"))
 
 	t.Run("no pointer pointers", func(t *testing.T) {
 		generated, err := os.ReadFile("./out/generated.go")
@@ -53,7 +63,7 @@ func TestModelGeneration(t *testing.T) {
 		for _, commentGroup := range node.Comments {
 			text := commentGroup.Text()
 			words := strings.Split(text, " ")
-			require.True(t, len(words) > 1, "expected description %q to have more than one word", text)
+			require.Greaterf(t, len(words), 1, "expected description %q to have more than one word", text)
 		}
 	})
 
@@ -65,13 +75,13 @@ func TestModelGeneration(t *testing.T) {
 
 		expectedTags := []string{
 			`json:"missing2" database:"MissingTypeNotNullmissing2"`,
-			`json:"name" database:"MissingInputname"`,
-			`json:"missing2" database:"MissingTypeNullablemissing2"`,
-			`json:"name" database:"TypeWithDescriptionname"`,
+			`json:"name,omitempty" database:"MissingInputname"`,
+			`json:"missing2,omitempty" database:"MissingTypeNullablemissing2"`,
+			`json:"name,omitempty" database:"TypeWithDescriptionname"`,
 		}
 
 		for _, tag := range expectedTags {
-			require.True(t, strings.Contains(fileText, tag))
+			require.Contains(t, fileText, tag, "\nexpected:\n"+tag+"\ngot\n"+fileText)
 		}
 	})
 
@@ -82,14 +92,14 @@ func TestModelGeneration(t *testing.T) {
 		fileText := string(file)
 
 		expectedTags := []string{
-			`anotherTag:"tag" json:"name"`,
-			`yetAnotherTag:"12" json:"enum"`,
-			`yaml:"noVal" repeated:"true" json:"noVal"`,
-			`someTag:"value" repeated:"true" json:"repeated"`,
+			`json:"name,omitempty" anotherTag:"tag"`,
+			`json:"enum,omitempty" yetAnotherTag:"12"`,
+			`json:"noVal,omitempty" yaml:"noVal" repeated:"true"`,
+			`json:"repeated,omitempty" someTag:"value" repeated:"true"`,
 		}
 
 		for _, tag := range expectedTags {
-			require.True(t, strings.Contains(fileText, tag), tag)
+			require.Contains(t, fileText, tag, "\nexpected:\n"+tag+"\ngot\n"+fileText)
 		}
 	})
 
@@ -190,7 +200,6 @@ func TestModelGeneration(t *testing.T) {
 			},
 		}
 		for _, tc := range cases {
-			tc := tc
 			t.Run(tc.name, func(t *testing.T) {
 				typeSpec, ok := generated.Scope.Lookup(tc.name).Decl.(*ast.TypeSpec)
 				require.True(t, ok)
@@ -271,6 +280,55 @@ func TestModelGeneration(t *testing.T) {
 	t.Run("overridden struct field names use same capitalization as config", func(t *testing.T) {
 		require.NotNil(t, out.RenameFieldTest{}.GOODnaME)
 	})
+
+	t.Run("nullable input fields can be made omittable with goField", func(t *testing.T) {
+		require.IsType(t, graphql.Omittable[*string]{}, out.MissingInput{}.NullString)
+		require.IsType(t, graphql.Omittable[*out.MissingEnum]{}, out.MissingInput{}.NullEnum)
+		require.IsType(t, graphql.Omittable[*out.ExistingInput]{}, out.MissingInput{}.NullObject)
+	})
+
+	t.Run("extra fields are present", func(t *testing.T) {
+		var m out.ExtraFieldsTest
+
+		require.IsType(t, int64(0), m.FieldInt)
+		require.IsType(t, extrafields.Type{}, m.FieldInternalType)
+		require.IsType(t, m.FieldStringPtr, new(string))
+		require.IsType(t, []int64{}, m.FieldIntSlice)
+	})
+}
+
+func TestModelGenerationOmitRootModels(t *testing.T) {
+	cfg, err := config.LoadConfig("testdata/gqlgen_omit_root_models.yml")
+	require.NoError(t, err)
+	require.NoError(t, cfg.Init())
+	p := Plugin{
+		MutateHook: mutateHook,
+		FieldHook:  DefaultFieldMutateHook,
+	}
+	require.NoError(t, p.MutateConfig(cfg))
+	require.NoError(t, goBuild(t, "./out/"))
+	generated, err := os.ReadFile("./out/generated_omit_root_models.go")
+	require.NoError(t, err)
+	require.NotContains(t, string(generated), "type Mutation struct")
+	require.NotContains(t, string(generated), "type Query struct")
+	require.NotContains(t, string(generated), "type Subscription struct")
+}
+
+func TestModelGenerationOmitResolverFields(t *testing.T) {
+	cfg, err := config.LoadConfig("testdata/gqlgen_omit_resolver_fields.yml")
+	require.NoError(t, err)
+	require.NoError(t, cfg.Init())
+	p := Plugin{
+		MutateHook: mutateHook,
+		FieldHook:  DefaultFieldMutateHook,
+	}
+	require.NoError(t, p.MutateConfig(cfg))
+	require.NoError(t, goBuild(t, "./out_omit_resolver_fields/"))
+	generated, err := os.ReadFile("./out_omit_resolver_fields/generated.go")
+	require.NoError(t, err)
+	require.Contains(t, string(generated), "type Base struct")
+	require.Contains(t, string(generated), "StandardField")
+	require.NotContains(t, string(generated), "ResolverField")
 }
 
 func TestModelGenerationStructFieldPointers(t *testing.T) {
@@ -320,6 +378,88 @@ func TestModelGenerationStructFieldPointers(t *testing.T) {
 	})
 }
 
+func TestModelGenerationNullableInputOmittable(t *testing.T) {
+	cfg, err := config.LoadConfig("testdata/gqlgen_nullable_input_omittable.yml")
+	require.NoError(t, err)
+	require.NoError(t, cfg.Init())
+	p := Plugin{
+		MutateHook: mutateHook,
+		FieldHook:  DefaultFieldMutateHook,
+	}
+	require.NoError(t, p.MutateConfig(cfg))
+
+	t.Run("nullable input fields are omittable", func(t *testing.T) {
+		require.IsType(t, graphql.Omittable[*string]{}, out_nullable_input_omittable.MissingInput{}.Name)
+		require.IsType(t, graphql.Omittable[*out_nullable_input_omittable.MissingEnum]{}, out_nullable_input_omittable.MissingInput{}.Enum)
+		require.IsType(t, graphql.Omittable[*string]{}, out_nullable_input_omittable.MissingInput{}.NullString)
+		require.IsType(t, graphql.Omittable[*out_nullable_input_omittable.MissingEnum]{}, out_nullable_input_omittable.MissingInput{}.NullEnum)
+		require.IsType(t, graphql.Omittable[*out_nullable_input_omittable.ExistingInput]{}, out_nullable_input_omittable.MissingInput{}.NullObject)
+	})
+
+	t.Run("non-nullable input fields are not omittable", func(t *testing.T) {
+		require.IsType(t, "", out_nullable_input_omittable.MissingInput{}.NonNullString)
+	})
+}
+
+func TestModelGenerationOmitemptyConfig(t *testing.T) {
+	suites := []struct {
+		n       string
+		cfg     string
+		enabled bool
+		t       any
+	}{
+		{
+			n:       "nil",
+			cfg:     "gqlgen_enable_model_json_omitempty_tag_nil.yml",
+			enabled: true,
+			t:       out_enable_model_json_omitempty_tag_nil.OmitEmptyJSONTagTest{},
+		},
+		{
+			n:       "true",
+			cfg:     "gqlgen_enable_model_json_omitempty_tag_true.yml",
+			enabled: true,
+			t:       out_enable_model_json_omitempty_tag_true.OmitEmptyJSONTagTest{},
+		},
+		{
+			n:       "false",
+			cfg:     "gqlgen_enable_model_json_omitempty_tag_false.yml",
+			enabled: false,
+			t:       out_enable_model_json_omitempty_tag_false.OmitEmptyJSONTagTest{},
+		},
+	}
+
+	for _, s := range suites {
+		t.Run(s.n, func(t *testing.T) {
+			cfg, err := config.LoadConfig(fmt.Sprintf("testdata/%s", s.cfg))
+			require.NoError(t, err)
+			require.NoError(t, cfg.Init())
+			p := Plugin{
+				MutateHook: mutateHook,
+				FieldHook:  DefaultFieldMutateHook,
+			}
+			require.NoError(t, p.MutateConfig(cfg))
+			rt := reflect.TypeOf(s.t)
+
+			// ensure non-nullable fields are never omitempty
+			sfn, ok := rt.FieldByName("ValueNonNil")
+			require.True(t, ok)
+			require.Equal(t, "ValueNonNil", sfn.Tag.Get("json"))
+
+			// test nullable fields for configured omitempty
+			sf, ok := rt.FieldByName("Value")
+			require.True(t, ok)
+
+			var expected string
+			if s.enabled {
+				expected = "Value,omitempty"
+			} else {
+				expected = "Value"
+			}
+			require.Equal(t, expected, sf.Tag.Get("json"))
+		})
+	}
+}
+
 func mutateHook(b *ModelBuild) *ModelBuild {
 	for _, model := range b.Models {
 		for _, field := range model.Fields {
@@ -356,9 +496,10 @@ func TestRemoveDuplicate(t *testing.T) {
 		t string
 	}
 	tests := []struct {
-		name string
-		args args
-		want string
+		name      string
+		args      args
+		want      string
+		wantPanic bool
 	}{
 		{
 			name: "Duplicate Test with 1",
@@ -372,35 +513,188 @@ func TestRemoveDuplicate(t *testing.T) {
 			args: args{
 				t: "json:\"name\" json:\"name2\"",
 			},
-			want: "json:\"name\"",
+			want: "json:\"name2\"",
 		},
 		{
 			name: "Duplicate Test with 3",
 			args: args{
 				t: "json:\"name\" json:\"name2\" json:\"name3\"",
 			},
-			want: "json:\"name\"",
+			want: "json:\"name3\"",
 		},
 		{
 			name: "Duplicate Test with 3 and 1 unrelated",
 			args: args{
 				t: "json:\"name\" something:\"name2\" json:\"name3\"",
 			},
-			want: "json:\"name\" something:\"name2\"",
+			want: "something:\"name2\" json:\"name3\"",
 		},
 		{
 			name: "Duplicate Test with 3 and 2 unrelated",
 			args: args{
 				t: "something:\"name1\" json:\"name\" something:\"name2\" json:\"name3\"",
 			},
-			want: "something:\"name1\" json:\"name\"",
+			want: "something:\"name2\" json:\"name3\"",
+		},
+		{
+			name: "Test tag value with leading empty space",
+			args: args{
+				t: "json:\"name, name2\"",
+			},
+			want:      "json:\"name, name2\"",
+			wantPanic: true,
+		},
+		{
+			name: "Test tag value with trailing empty space",
+			args: args{
+				t: "json:\"name,name2 \"",
+			},
+			want:      "json:\"name,name2 \"",
+			wantPanic: true,
+		},
+		{
+			name: "Test tag value with space in between",
+			args: args{
+				t: "gorm:\"unique;not null\"",
+			},
+			want:      "gorm:\"unique;not null\"",
+			wantPanic: false,
+		},
+		{
+			name: "Test mix use of gorm and json tags",
+			args: args{
+				t: "gorm:\"unique;not null\" json:\"name,name2\"",
+			},
+			want:      "gorm:\"unique;not null\" json:\"name,name2\"",
+			wantPanic: false,
+		},
+		{
+			name: "Test gorm tag with colon",
+			args: args{
+				t: "gorm:\"type:varchar(63);unique_index\"",
+			},
+			want:      "gorm:\"type:varchar(63);unique_index\"",
+			wantPanic: false,
+		},
+		{
+			name: "Test mix use of gorm and duplicate json tags with colon",
+			args: args{
+				t: "json:\"name0\" gorm:\"type:varchar(63);unique_index\" json:\"name,name2\"",
+			},
+			want:      "gorm:\"type:varchar(63);unique_index\" json:\"name,name2\"",
+			wantPanic: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := removeDuplicateTags(tt.args.t); got != tt.want {
-				t.Errorf("removeDuplicate() = %v, want %v", got, tt.want)
+			if tt.wantPanic {
+				assert.Panics(t, func() { removeDuplicateTags(tt.args.t) }, "The code did not panic")
+			} else {
+				if got := removeDuplicateTags(tt.args.t); got != tt.want {
+					t.Errorf("removeDuplicate() = %v, want %v", got, tt.want)
+				}
 			}
 		})
 	}
+}
+
+func Test_containsInvalidSpace(t *testing.T) {
+	type args struct {
+		valuesString string
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "Test tag value with leading empty space",
+			args: args{
+				valuesString: "name, name2",
+			},
+			want: true,
+		},
+		{
+			name: "Test tag value with trailing empty space",
+			args: args{
+				valuesString: "name ,name2",
+			},
+			want: true,
+		},
+		{
+			name: "Test tag value with valid empty space in words",
+			args: args{
+				valuesString: "accept this,name2",
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, containsInvalidSpace(tt.args.valuesString), "containsInvalidSpace(%v)", tt.args.valuesString)
+		})
+	}
+}
+
+func Test_splitTagsBySpace(t *testing.T) {
+	type args struct {
+		tagsString string
+	}
+	tests := []struct {
+		name string
+		args args
+		want []string
+	}{
+		{
+			name: "multiple tags, single value",
+			args: args{
+				tagsString: "json:\"name\" something:\"name2\" json:\"name3\"",
+			},
+			want: []string{"json:\"name\"", "something:\"name2\"", "json:\"name3\""},
+		},
+		{
+			name: "multiple tag, multiple values",
+			args: args{
+				tagsString: "json:\"name\" something:\"name2\" json:\"name3,name4\"",
+			},
+			want: []string{"json:\"name\"", "something:\"name2\"", "json:\"name3,name4\""},
+		},
+		{
+			name: "single tag, single value",
+			args: args{
+				tagsString: "json:\"name\"",
+			},
+			want: []string{"json:\"name\""},
+		},
+		{
+			name: "single tag, multiple values",
+			args: args{
+				tagsString: "json:\"name,name2\"",
+			},
+			want: []string{"json:\"name,name2\""},
+		},
+		{
+			name: "space in value",
+			args: args{
+				tagsString: "gorm:\"not nul,name2\"",
+			},
+			want: []string{"gorm:\"not nul,name2\""},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, splitTagsBySpace(tt.args.tagsString), "splitTagsBySpace(%v)", tt.args.tagsString)
+		})
+	}
+}
+
+func TestCustomTemplate(t *testing.T) {
+	cfg, err := config.LoadConfig("testdata/gqlgen_custom_model_template.yml")
+	require.NoError(t, err)
+	require.NoError(t, cfg.Init())
+	p := Plugin{
+		MutateHook: mutateHook,
+		FieldHook:  DefaultFieldMutateHook,
+	}
+	require.NoError(t, p.MutateConfig(cfg))
 }

@@ -1,12 +1,15 @@
 package code
 
 import (
+	"errors"
 	"fmt"
 	"go/types"
 )
 
 // CompatibleTypes isnt a strict comparison, it allows for pointer differences
-func CompatibleTypes(expected types.Type, actual types.Type) error {
+func CompatibleTypes(expected, actual types.Type) error {
+	// Unwrap any aliases
+	expected, actual = Unalias(expected), Unalias(actual)
 	// Special case to deal with pointer mismatches
 	{
 		expectedPtr, expectedIsPtr := expected.(*types.Pointer)
@@ -32,29 +35,25 @@ func CompatibleTypes(expected types.Type, actual types.Type) error {
 	case *types.Array:
 		if actual, ok := actual.(*types.Array); ok {
 			if expected.Len() != actual.Len() {
-				return fmt.Errorf("array length differs")
+				return errors.New("array length differs")
 			}
 
 			return CompatibleTypes(expected.Elem(), actual.Elem())
 		}
 
 	case *types.Basic:
-		if actualBasic, ok := actual.(*types.Basic); ok {
-			if actualBasic.Kind() != expected.Kind() && similarBasicKind(actualBasic.Kind()) != expected.Kind() {
-				return fmt.Errorf("basic kind differs, %s != %s", expected.Name(), actualBasic.Name())
+		if actual, ok := actual.(*types.Basic); ok {
+			if actual.Kind() != expected.Kind() {
+				return fmt.Errorf("basic kind differs, %s != %s", expected.Name(), actual.Name())
 			}
 
 			return nil
-		} else if actual, ok := actual.(*types.Named); ok {
-			if underlyingBasic, ok := actual.Underlying().(*types.Basic); ok {
-				return CompatibleTypes(expected, underlyingBasic)
-			}
 		}
 
 	case *types.Struct:
 		if actual, ok := actual.(*types.Struct); ok {
 			if expected.NumFields() != actual.NumFields() {
-				return fmt.Errorf("number of struct fields differ")
+				return errors.New("number of struct fields differ")
 			}
 
 			for i := 0; i < expected.NumFields(); i++ {
@@ -88,11 +87,8 @@ func CompatibleTypes(expected types.Type, actual types.Type) error {
 			if err := CompatibleTypes(expected.Params(), actual.Params()); err != nil {
 				return err
 			}
-			if err := CompatibleTypes(expected.Results(), actual.Results()); err != nil {
-				return err
-			}
-
-			return nil
+			err := CompatibleTypes(expected.Results(), actual.Results())
+			return err
 		}
 	case *types.Interface:
 		if actual, ok := actual.(*types.Interface); ok {
@@ -118,11 +114,8 @@ func CompatibleTypes(expected types.Type, actual types.Type) error {
 				return err
 			}
 
-			if err := CompatibleTypes(expected.Elem(), actual.Elem()); err != nil {
-				return err
-			}
-
-			return nil
+			err := CompatibleTypes(expected.Elem(), actual.Elem())
+			return err
 		}
 
 	case *types.Chan:
@@ -162,15 +155,4 @@ func CompatibleTypes(expected types.Type, actual types.Type) error {
 	}
 
 	return fmt.Errorf("type mismatch %T != %T", expected, actual)
-}
-
-func similarBasicKind(kind types.BasicKind) types.BasicKind {
-	switch kind {
-	case types.Int8, types.Int16:
-		return types.Int64
-	case types.Uint, types.Uint8, types.Uint16, types.Uint32: // exclude Uint64: it still needs scalar with custom marshalling/unmarshalling because it is bigger than int64
-		return types.Int64
-	default:
-		return kind
-	}
 }

@@ -2,13 +2,15 @@ package apollofederatedtracingv1
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/handler/apollofederatedtracingv1/generated"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type TreeBuilder struct {
@@ -46,14 +48,14 @@ func NewTreeBuilder() *TreeBuilder {
 // StartTimer marks the time using protobuf timestamp format for use in timing calculations
 func (tb *TreeBuilder) StartTimer(ctx context.Context) {
 	if tb.startTime != nil {
-		fmt.Println(fmt.Errorf("StartTimer called twice"))
+		fmt.Println(errors.New("StartTimer called twice"))
 	}
 	if tb.stopped {
-		fmt.Println(fmt.Errorf("StartTimer called after StopTimer"))
+		fmt.Println(errors.New("StartTimer called after StopTimer"))
 	}
 
-	rc := graphql.GetOperationContext(ctx)
-	start := rc.Stats.OperationStart
+	opCtx := graphql.GetOperationContext(ctx)
+	start := opCtx.Stats.OperationStart
 
 	tb.Trace.StartTime = timestamppb.New(start)
 	tb.startTime = &start
@@ -62,10 +64,10 @@ func (tb *TreeBuilder) StartTimer(ctx context.Context) {
 // StopTimer marks the end of the timer, along with setting the related fields in the protobuf representation
 func (tb *TreeBuilder) StopTimer(ctx context.Context) {
 	if tb.startTime == nil {
-		fmt.Println(fmt.Errorf("StopTimer called before StartTimer"))
+		fmt.Println(errors.New("StopTimer called before StartTimer"))
 	}
 	if tb.stopped {
-		fmt.Println(fmt.Errorf("StopTimer called twice"))
+		fmt.Println(errors.New("StopTimer called twice"))
 	}
 
 	ts := graphql.Now().UTC()
@@ -78,11 +80,11 @@ func (tb *TreeBuilder) StopTimer(ctx context.Context) {
 // field as now - tree.StartTime; these are used by Apollo to calculate how fields are being resolved in the AST
 func (tb *TreeBuilder) WillResolveField(ctx context.Context) {
 	if tb.startTime == nil {
-		fmt.Println(fmt.Errorf("WillResolveField called before StartTimer"))
+		fmt.Println(errors.New("WillResolveField called before StartTimer"))
 		return
 	}
 	if tb.stopped {
-		fmt.Println(fmt.Errorf("WillResolveField called after StopTimer"))
+		fmt.Println(errors.New("WillResolveField called after StopTimer"))
 		return
 	}
 	fc := graphql.GetFieldContext(ctx)
