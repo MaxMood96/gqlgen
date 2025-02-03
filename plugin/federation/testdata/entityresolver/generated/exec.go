@@ -9,10 +9,12 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/introspection"
 	"github.com/99designs/gqlgen/plugin/federation/fedruntime"
+	"github.com/99designs/gqlgen/plugin/federation/testdata/entityresolver/generated/model"
 	gqlparser "github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
 )
@@ -22,6 +24,7 @@ import (
 // NewExecutableSchema creates an ExecutableSchema from the ResolverRoot interface.
 func NewExecutableSchema(cfg Config) graphql.ExecutableSchema {
 	return &executableSchema{
+		schema:     cfg.Schema,
 		resolvers:  cfg.Resolvers,
 		directives: cfg.Directives,
 		complexity: cfg.Complexity,
@@ -29,6 +32,7 @@ func NewExecutableSchema(cfg Config) graphql.ExecutableSchema {
 }
 
 type Config struct {
+	Schema     *ast.Schema
 	Resolvers  ResolverRoot
 	Directives DirectiveRoot
 	Complexity ComplexityRoot
@@ -39,7 +43,6 @@ type ResolverRoot interface {
 }
 
 type DirectiveRoot struct {
-	EntityResolver func(ctx context.Context, obj interface{}, next graphql.Resolver, multi *bool) (res interface{}, err error)
 }
 
 type ComplexityRoot struct {
@@ -47,11 +50,11 @@ type ComplexityRoot struct {
 		FindHelloByName                            func(childComplexity int, name string) int
 		FindHelloMultiSingleKeysByKey1AndKey2      func(childComplexity int, key1 string, key2 string) int
 		FindHelloWithErrorsByName                  func(childComplexity int, name string) int
-		FindManyMultiHelloByNames                  func(childComplexity int, reps []*MultiHelloByNamesInput) int
-		FindManyMultiHelloMultipleRequiresByNames  func(childComplexity int, reps []*MultiHelloMultipleRequiresByNamesInput) int
-		FindManyMultiHelloRequiresByNames          func(childComplexity int, reps []*MultiHelloRequiresByNamesInput) int
-		FindManyMultiHelloWithErrorByNames         func(childComplexity int, reps []*MultiHelloWithErrorByNamesInput) int
-		FindManyMultiPlanetRequiresNestedByNames   func(childComplexity int, reps []*MultiPlanetRequiresNestedByNamesInput) int
+		FindManyMultiHelloByNames                  func(childComplexity int, reps []*model.MultiHelloByNamesInput) int
+		FindManyMultiHelloMultipleRequiresByNames  func(childComplexity int, reps []*model.MultiHelloMultipleRequiresByNamesInput) int
+		FindManyMultiHelloRequiresByNames          func(childComplexity int, reps []*model.MultiHelloRequiresByNamesInput) int
+		FindManyMultiHelloWithErrorByNames         func(childComplexity int, reps []*model.MultiHelloWithErrorByNamesInput) int
+		FindManyMultiPlanetRequiresNestedByNames   func(childComplexity int, reps []*model.MultiPlanetRequiresNestedByNamesInput) int
 		FindPlanetMultipleRequiresByName           func(childComplexity int, name string) int
 		FindPlanetRequiresByName                   func(childComplexity int, name string) int
 		FindPlanetRequiresNestedByName             func(childComplexity int, name string) int
@@ -123,7 +126,7 @@ type ComplexityRoot struct {
 
 	Query struct {
 		__resolve__service func(childComplexity int) int
-		__resolve_entities func(childComplexity int, representations []map[string]interface{}) int
+		__resolve_entities func(childComplexity int, representations []map[string]any) int
 	}
 
 	World struct {
@@ -148,35 +151,39 @@ type ComplexityRoot struct {
 }
 
 type EntityResolver interface {
-	FindHelloByName(ctx context.Context, name string) (*Hello, error)
-	FindHelloMultiSingleKeysByKey1AndKey2(ctx context.Context, key1 string, key2 string) (*HelloMultiSingleKeys, error)
-	FindHelloWithErrorsByName(ctx context.Context, name string) (*HelloWithErrors, error)
-	FindManyMultiHelloByNames(ctx context.Context, reps []*MultiHelloByNamesInput) ([]*MultiHello, error)
-	FindManyMultiHelloMultipleRequiresByNames(ctx context.Context, reps []*MultiHelloMultipleRequiresByNamesInput) ([]*MultiHelloMultipleRequires, error)
-	FindManyMultiHelloRequiresByNames(ctx context.Context, reps []*MultiHelloRequiresByNamesInput) ([]*MultiHelloRequires, error)
-	FindManyMultiHelloWithErrorByNames(ctx context.Context, reps []*MultiHelloWithErrorByNamesInput) ([]*MultiHelloWithError, error)
-	FindManyMultiPlanetRequiresNestedByNames(ctx context.Context, reps []*MultiPlanetRequiresNestedByNamesInput) ([]*MultiPlanetRequiresNested, error)
-	FindPlanetMultipleRequiresByName(ctx context.Context, name string) (*PlanetMultipleRequires, error)
-	FindPlanetRequiresByName(ctx context.Context, name string) (*PlanetRequires, error)
-	FindPlanetRequiresNestedByName(ctx context.Context, name string) (*PlanetRequiresNested, error)
-	FindWorldByHelloNameAndFoo(ctx context.Context, helloName string, foo string) (*World, error)
-	FindWorldNameByName(ctx context.Context, name string) (*WorldName, error)
-	FindWorldWithMultipleKeysByHelloNameAndFoo(ctx context.Context, helloName string, foo string) (*WorldWithMultipleKeys, error)
-	FindWorldWithMultipleKeysByBar(ctx context.Context, bar int) (*WorldWithMultipleKeys, error)
+	FindHelloByName(ctx context.Context, name string) (*model.Hello, error)
+	FindHelloMultiSingleKeysByKey1AndKey2(ctx context.Context, key1 string, key2 string) (*model.HelloMultiSingleKeys, error)
+	FindHelloWithErrorsByName(ctx context.Context, name string) (*model.HelloWithErrors, error)
+	FindManyMultiHelloByNames(ctx context.Context, reps []*model.MultiHelloByNamesInput) ([]*model.MultiHello, error)
+	FindManyMultiHelloMultipleRequiresByNames(ctx context.Context, reps []*model.MultiHelloMultipleRequiresByNamesInput) ([]*model.MultiHelloMultipleRequires, error)
+	FindManyMultiHelloRequiresByNames(ctx context.Context, reps []*model.MultiHelloRequiresByNamesInput) ([]*model.MultiHelloRequires, error)
+	FindManyMultiHelloWithErrorByNames(ctx context.Context, reps []*model.MultiHelloWithErrorByNamesInput) ([]*model.MultiHelloWithError, error)
+	FindManyMultiPlanetRequiresNestedByNames(ctx context.Context, reps []*model.MultiPlanetRequiresNestedByNamesInput) ([]*model.MultiPlanetRequiresNested, error)
+	FindPlanetMultipleRequiresByName(ctx context.Context, name string) (*model.PlanetMultipleRequires, error)
+	FindPlanetRequiresByName(ctx context.Context, name string) (*model.PlanetRequires, error)
+	FindPlanetRequiresNestedByName(ctx context.Context, name string) (*model.PlanetRequiresNested, error)
+	FindWorldByHelloNameAndFoo(ctx context.Context, helloName string, foo string) (*model.World, error)
+	FindWorldNameByName(ctx context.Context, name string) (*model.WorldName, error)
+	FindWorldWithMultipleKeysByHelloNameAndFoo(ctx context.Context, helloName string, foo string) (*model.WorldWithMultipleKeys, error)
+	FindWorldWithMultipleKeysByBar(ctx context.Context, bar int) (*model.WorldWithMultipleKeys, error)
 }
 
 type executableSchema struct {
+	schema     *ast.Schema
 	resolvers  ResolverRoot
 	directives DirectiveRoot
 	complexity ComplexityRoot
 }
 
 func (e *executableSchema) Schema() *ast.Schema {
+	if e.schema != nil {
+		return e.schema
+	}
 	return parsedSchema
 }
 
-func (e *executableSchema) Complexity(typeName, field string, childComplexity int, rawArgs map[string]interface{}) (int, bool) {
-	ec := executionContext{nil, e}
+func (e *executableSchema) Complexity(typeName, field string, childComplexity int, rawArgs map[string]any) (int, bool) {
+	ec := executionContext{nil, e, 0, 0, nil}
 	_ = ec
 	switch typeName + "." + field {
 
@@ -226,7 +233,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Entity.FindManyMultiHelloByNames(childComplexity, args["reps"].([]*MultiHelloByNamesInput)), true
+		return e.complexity.Entity.FindManyMultiHelloByNames(childComplexity, args["reps"].([]*model.MultiHelloByNamesInput)), true
 
 	case "Entity.findManyMultiHelloMultipleRequiresByNames":
 		if e.complexity.Entity.FindManyMultiHelloMultipleRequiresByNames == nil {
@@ -238,7 +245,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Entity.FindManyMultiHelloMultipleRequiresByNames(childComplexity, args["reps"].([]*MultiHelloMultipleRequiresByNamesInput)), true
+		return e.complexity.Entity.FindManyMultiHelloMultipleRequiresByNames(childComplexity, args["reps"].([]*model.MultiHelloMultipleRequiresByNamesInput)), true
 
 	case "Entity.findManyMultiHelloRequiresByNames":
 		if e.complexity.Entity.FindManyMultiHelloRequiresByNames == nil {
@@ -250,7 +257,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Entity.FindManyMultiHelloRequiresByNames(childComplexity, args["reps"].([]*MultiHelloRequiresByNamesInput)), true
+		return e.complexity.Entity.FindManyMultiHelloRequiresByNames(childComplexity, args["reps"].([]*model.MultiHelloRequiresByNamesInput)), true
 
 	case "Entity.findManyMultiHelloWithErrorByNames":
 		if e.complexity.Entity.FindManyMultiHelloWithErrorByNames == nil {
@@ -262,7 +269,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Entity.FindManyMultiHelloWithErrorByNames(childComplexity, args["reps"].([]*MultiHelloWithErrorByNamesInput)), true
+		return e.complexity.Entity.FindManyMultiHelloWithErrorByNames(childComplexity, args["reps"].([]*model.MultiHelloWithErrorByNamesInput)), true
 
 	case "Entity.findManyMultiPlanetRequiresNestedByNames":
 		if e.complexity.Entity.FindManyMultiPlanetRequiresNestedByNames == nil {
@@ -274,7 +281,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Entity.FindManyMultiPlanetRequiresNestedByNames(childComplexity, args["reps"].([]*MultiPlanetRequiresNestedByNamesInput)), true
+		return e.complexity.Entity.FindManyMultiPlanetRequiresNestedByNames(childComplexity, args["reps"].([]*model.MultiPlanetRequiresNestedByNamesInput)), true
 
 	case "Entity.findPlanetMultipleRequiresByName":
 		if e.complexity.Entity.FindPlanetMultipleRequiresByName == nil {
@@ -566,7 +573,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.__resolve_entities(childComplexity, args["representations"].([]map[string]interface{})), true
+		return e.complexity.Query.__resolve_entities(childComplexity, args["representations"].([]map[string]any)), true
 
 	case "World.bar":
 		if e.complexity.World.Bar == nil {
@@ -629,8 +636,8 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 }
 
 func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
-	rc := graphql.GetOperationContext(ctx)
-	ec := executionContext{rc, e}
+	opCtx := graphql.GetOperationContext(ctx)
+	ec := executionContext{opCtx, e, 0, 0, make(chan graphql.DeferredResult)}
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputMultiHelloByNamesInput,
 		ec.unmarshalInputMultiHelloMultipleRequiresByNamesInput,
@@ -640,21 +647,36 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	)
 	first := true
 
-	switch rc.Operation.Operation {
+	switch opCtx.Operation.Operation {
 	case ast.Query:
 		return func(ctx context.Context) *graphql.Response {
-			if !first {
-				return nil
+			var response graphql.Response
+			var data graphql.Marshaler
+			if first {
+				first = false
+				ctx = graphql.WithUnmarshalerMap(ctx, inputUnmarshalMap)
+				data = ec._Query(ctx, opCtx.Operation.SelectionSet)
+			} else {
+				if atomic.LoadInt32(&ec.pendingDeferred) > 0 {
+					result := <-ec.deferredResults
+					atomic.AddInt32(&ec.pendingDeferred, -1)
+					data = result.Result
+					response.Path = result.Path
+					response.Label = result.Label
+					response.Errors = result.Errors
+				} else {
+					return nil
+				}
 			}
-			first = false
-			ctx = graphql.WithUnmarshalerMap(ctx, inputUnmarshalMap)
-			data := ec._Query(ctx, rc.Operation.SelectionSet)
 			var buf bytes.Buffer
 			data.MarshalGQL(&buf)
-
-			return &graphql.Response{
-				Data: buf.Bytes(),
+			response.Data = buf.Bytes()
+			if atomic.LoadInt32(&ec.deferred) > 0 {
+				hasNext := atomic.LoadInt32(&ec.pendingDeferred) > 0
+				response.HasNext = &hasNext
 			}
+
+			return &response
 		}
 
 	default:
@@ -665,20 +687,42 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 type executionContext struct {
 	*graphql.OperationContext
 	*executableSchema
+	deferred        int32
+	pendingDeferred int32
+	deferredResults chan graphql.DeferredResult
+}
+
+func (ec *executionContext) processDeferredGroup(dg graphql.DeferredGroup) {
+	atomic.AddInt32(&ec.pendingDeferred, 1)
+	go func() {
+		ctx := graphql.WithFreshResponseContext(dg.Context)
+		dg.FieldSet.Dispatch(ctx)
+		ds := graphql.DeferredResult{
+			Path:   dg.Path,
+			Label:  dg.Label,
+			Result: dg.FieldSet,
+			Errors: graphql.GetErrors(ctx),
+		}
+		// null fields should bubble up
+		if dg.FieldSet.Invalids > 0 {
+			ds.Result = graphql.Null
+		}
+		ec.deferredResults <- ds
+	}()
 }
 
 func (ec *executionContext) introspectSchema() (*introspection.Schema, error) {
 	if ec.DisableIntrospection {
 		return nil, errors.New("introspection disabled")
 	}
-	return introspection.WrapSchema(parsedSchema), nil
+	return introspection.WrapSchema(ec.Schema()), nil
 }
 
 func (ec *executionContext) introspectType(name string) (*introspection.Type, error) {
 	if ec.DisableIntrospection {
 		return nil, errors.New("introspection disabled")
 	}
-	return introspection.WrapTypeFromDef(parsedSchema, parsedSchema.Types[name]), nil
+	return introspection.WrapTypeFromDef(ec.Schema(), ec.Schema().Types[name]), nil
 }
 
 var sources = []*ast.Source{
@@ -761,15 +805,13 @@ type MultiHelloMultipleRequires @key(fields: "name") @entityResolver(multi: true
 }
 `, BuiltIn: false},
 	{Name: "../../../federation/directives.graphql", Input: `
-	scalar _Any
-	scalar _FieldSet
-
-	directive @external on FIELD_DEFINITION
+	directive @key(fields: _FieldSet!) repeatable on OBJECT | INTERFACE
 	directive @requires(fields: _FieldSet!) on FIELD_DEFINITION
 	directive @provides(fields: _FieldSet!) on FIELD_DEFINITION
 	directive @extends on OBJECT | INTERFACE
-
-	directive @key(fields: _FieldSet!) repeatable on OBJECT | INTERFACE
+	directive @external on FIELD_DEFINITION
+	scalar _Any
+	scalar _FieldSet
 `, BuiltIn: true},
 	{Name: "../../../federation/entity.graphql", Input: `
 # a union of all types that use the @key directive
@@ -797,14 +839,14 @@ input MultiPlanetRequiresNestedByNamesInput {
 
 # fake type to build resolver interfaces for users to implement
 type Entity {
-		findHelloByName(name: String!,): Hello!
+	findHelloByName(name: String!,): Hello!
 	findHelloMultiSingleKeysByKey1AndKey2(key1: String!,key2: String!,): HelloMultiSingleKeys!
 	findHelloWithErrorsByName(name: String!,): HelloWithErrors!
-	findManyMultiHelloByNames(reps: [MultiHelloByNamesInput!]!): [MultiHello]
-	findManyMultiHelloMultipleRequiresByNames(reps: [MultiHelloMultipleRequiresByNamesInput!]!): [MultiHelloMultipleRequires]
-	findManyMultiHelloRequiresByNames(reps: [MultiHelloRequiresByNamesInput!]!): [MultiHelloRequires]
-	findManyMultiHelloWithErrorByNames(reps: [MultiHelloWithErrorByNamesInput!]!): [MultiHelloWithError]
-	findManyMultiPlanetRequiresNestedByNames(reps: [MultiPlanetRequiresNestedByNamesInput!]!): [MultiPlanetRequiresNested]
+	findManyMultiHelloByNames(reps: [MultiHelloByNamesInput]!): [MultiHello]
+	findManyMultiHelloMultipleRequiresByNames(reps: [MultiHelloMultipleRequiresByNamesInput]!): [MultiHelloMultipleRequires]
+	findManyMultiHelloRequiresByNames(reps: [MultiHelloRequiresByNamesInput]!): [MultiHelloRequires]
+	findManyMultiHelloWithErrorByNames(reps: [MultiHelloWithErrorByNamesInput]!): [MultiHelloWithError]
+	findManyMultiPlanetRequiresNestedByNames(reps: [MultiPlanetRequiresNestedByNamesInput]!): [MultiPlanetRequiresNested]
 	findPlanetMultipleRequiresByName(name: String!,): PlanetMultipleRequires!
 	findPlanetRequiresByName(name: String!,): PlanetRequires!
 	findPlanetRequiresNestedByName(name: String!,): PlanetRequiresNested!
@@ -812,7 +854,6 @@ type Entity {
 	findWorldNameByName(name: String!,): WorldName!
 	findWorldWithMultipleKeysByHelloNameAndFoo(helloName: String!,foo: String!,): WorldWithMultipleKeys!
 	findWorldWithMultipleKeysByBar(bar: Int!,): WorldWithMultipleKeys!
-
 }
 
 type _Service {
@@ -831,331 +872,661 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 
 // region    ***************************** args.gotpl *****************************
 
-func (ec *executionContext) dir_entityResolver_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+func (ec *executionContext) field_Entity_findHelloByName_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 *bool
-	if tmp, ok := rawArgs["multi"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("multi"))
-		arg0, err = ec.unmarshalOBoolean2ᚖbool(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["multi"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Entity_findHelloByName_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 string
-	if tmp, ok := rawArgs["name"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
-		arg0, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field_Entity_findHelloByName_argsName(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["name"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Entity_findHelloByName_argsName(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["name"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Entity_findHelloMultiSingleKeysByKey1AndKey2_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+	if tmp, ok := rawArgs["name"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Entity_findHelloMultiSingleKeysByKey1AndKey2_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 string
-	if tmp, ok := rawArgs["key1"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("key1"))
-		arg0, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field_Entity_findHelloMultiSingleKeysByKey1AndKey2_argsKey1(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["key1"] = arg0
-	var arg1 string
-	if tmp, ok := rawArgs["key2"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("key2"))
-		arg1, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	arg1, err := ec.field_Entity_findHelloMultiSingleKeysByKey1AndKey2_argsKey2(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["key2"] = arg1
 	return args, nil
 }
+func (ec *executionContext) field_Entity_findHelloMultiSingleKeysByKey1AndKey2_argsKey1(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["key1"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Entity_findHelloWithErrorsByName_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("key1"))
+	if tmp, ok := rawArgs["key1"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Entity_findHelloMultiSingleKeysByKey1AndKey2_argsKey2(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["key2"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("key2"))
+	if tmp, ok := rawArgs["key2"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Entity_findHelloWithErrorsByName_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 string
-	if tmp, ok := rawArgs["name"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
-		arg0, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field_Entity_findHelloWithErrorsByName_argsName(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["name"] = arg0
 	return args, nil
 }
-
-func (ec *executionContext) field_Entity_findManyMultiHelloByNames_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 []*MultiHelloByNamesInput
-	if tmp, ok := rawArgs["reps"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reps"))
-		arg0, err = ec.unmarshalNMultiHelloByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloByNamesInputᚄ(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+func (ec *executionContext) field_Entity_findHelloWithErrorsByName_argsName(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["name"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
 	}
-	args["reps"] = arg0
-	return args, nil
-}
 
-func (ec *executionContext) field_Entity_findManyMultiHelloMultipleRequiresByNames_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 []*MultiHelloMultipleRequiresByNamesInput
-	if tmp, ok := rawArgs["reps"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reps"))
-		arg0, err = ec.unmarshalNMultiHelloMultipleRequiresByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloMultipleRequiresByNamesInputᚄ(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["reps"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Entity_findManyMultiHelloRequiresByNames_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 []*MultiHelloRequiresByNamesInput
-	if tmp, ok := rawArgs["reps"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reps"))
-		arg0, err = ec.unmarshalNMultiHelloRequiresByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloRequiresByNamesInputᚄ(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["reps"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Entity_findManyMultiHelloWithErrorByNames_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 []*MultiHelloWithErrorByNamesInput
-	if tmp, ok := rawArgs["reps"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reps"))
-		arg0, err = ec.unmarshalNMultiHelloWithErrorByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloWithErrorByNamesInputᚄ(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["reps"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Entity_findManyMultiPlanetRequiresNestedByNames_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 []*MultiPlanetRequiresNestedByNamesInput
-	if tmp, ok := rawArgs["reps"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reps"))
-		arg0, err = ec.unmarshalNMultiPlanetRequiresNestedByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiPlanetRequiresNestedByNamesInputᚄ(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["reps"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Entity_findPlanetMultipleRequiresByName_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 string
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
 	if tmp, ok := rawArgs["name"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
-		arg0, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Entity_findManyMultiHelloByNames_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Entity_findManyMultiHelloByNames_argsReps(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["reps"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Entity_findManyMultiHelloByNames_argsReps(
+	ctx context.Context,
+	rawArgs map[string]any,
+) ([]*model.MultiHelloByNamesInput, error) {
+	if _, ok := rawArgs["reps"]; !ok {
+		var zeroVal []*model.MultiHelloByNamesInput
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("reps"))
+	if tmp, ok := rawArgs["reps"]; ok {
+		return ec.unmarshalNMultiHelloByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloByNamesInput(ctx, tmp)
+	}
+
+	var zeroVal []*model.MultiHelloByNamesInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Entity_findManyMultiHelloMultipleRequiresByNames_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Entity_findManyMultiHelloMultipleRequiresByNames_argsReps(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["reps"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Entity_findManyMultiHelloMultipleRequiresByNames_argsReps(
+	ctx context.Context,
+	rawArgs map[string]any,
+) ([]*model.MultiHelloMultipleRequiresByNamesInput, error) {
+	if _, ok := rawArgs["reps"]; !ok {
+		var zeroVal []*model.MultiHelloMultipleRequiresByNamesInput
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("reps"))
+	if tmp, ok := rawArgs["reps"]; ok {
+		return ec.unmarshalNMultiHelloMultipleRequiresByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloMultipleRequiresByNamesInput(ctx, tmp)
+	}
+
+	var zeroVal []*model.MultiHelloMultipleRequiresByNamesInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Entity_findManyMultiHelloRequiresByNames_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Entity_findManyMultiHelloRequiresByNames_argsReps(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["reps"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Entity_findManyMultiHelloRequiresByNames_argsReps(
+	ctx context.Context,
+	rawArgs map[string]any,
+) ([]*model.MultiHelloRequiresByNamesInput, error) {
+	if _, ok := rawArgs["reps"]; !ok {
+		var zeroVal []*model.MultiHelloRequiresByNamesInput
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("reps"))
+	if tmp, ok := rawArgs["reps"]; ok {
+		return ec.unmarshalNMultiHelloRequiresByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloRequiresByNamesInput(ctx, tmp)
+	}
+
+	var zeroVal []*model.MultiHelloRequiresByNamesInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Entity_findManyMultiHelloWithErrorByNames_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Entity_findManyMultiHelloWithErrorByNames_argsReps(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["reps"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Entity_findManyMultiHelloWithErrorByNames_argsReps(
+	ctx context.Context,
+	rawArgs map[string]any,
+) ([]*model.MultiHelloWithErrorByNamesInput, error) {
+	if _, ok := rawArgs["reps"]; !ok {
+		var zeroVal []*model.MultiHelloWithErrorByNamesInput
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("reps"))
+	if tmp, ok := rawArgs["reps"]; ok {
+		return ec.unmarshalNMultiHelloWithErrorByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloWithErrorByNamesInput(ctx, tmp)
+	}
+
+	var zeroVal []*model.MultiHelloWithErrorByNamesInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Entity_findManyMultiPlanetRequiresNestedByNames_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Entity_findManyMultiPlanetRequiresNestedByNames_argsReps(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["reps"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Entity_findManyMultiPlanetRequiresNestedByNames_argsReps(
+	ctx context.Context,
+	rawArgs map[string]any,
+) ([]*model.MultiPlanetRequiresNestedByNamesInput, error) {
+	if _, ok := rawArgs["reps"]; !ok {
+		var zeroVal []*model.MultiPlanetRequiresNestedByNamesInput
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("reps"))
+	if tmp, ok := rawArgs["reps"]; ok {
+		return ec.unmarshalNMultiPlanetRequiresNestedByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiPlanetRequiresNestedByNamesInput(ctx, tmp)
+	}
+
+	var zeroVal []*model.MultiPlanetRequiresNestedByNamesInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Entity_findPlanetMultipleRequiresByName_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Entity_findPlanetMultipleRequiresByName_argsName(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["name"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Entity_findPlanetMultipleRequiresByName_argsName(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["name"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Entity_findPlanetRequiresByName_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 string
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
 	if tmp, ok := rawArgs["name"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
-		arg0, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Entity_findPlanetRequiresByName_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Entity_findPlanetRequiresByName_argsName(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["name"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Entity_findPlanetRequiresByName_argsName(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["name"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Entity_findPlanetRequiresNestedByName_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 string
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
 	if tmp, ok := rawArgs["name"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
-		arg0, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Entity_findPlanetRequiresNestedByName_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Entity_findPlanetRequiresNestedByName_argsName(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["name"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Entity_findPlanetRequiresNestedByName_argsName(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["name"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Entity_findWorldByHelloNameAndFoo_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+	if tmp, ok := rawArgs["name"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Entity_findWorldByHelloNameAndFoo_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 string
-	if tmp, ok := rawArgs["helloName"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("helloName"))
-		arg0, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field_Entity_findWorldByHelloNameAndFoo_argsHelloName(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["helloName"] = arg0
-	var arg1 string
-	if tmp, ok := rawArgs["foo"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("foo"))
-		arg1, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	arg1, err := ec.field_Entity_findWorldByHelloNameAndFoo_argsFoo(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["foo"] = arg1
 	return args, nil
 }
+func (ec *executionContext) field_Entity_findWorldByHelloNameAndFoo_argsHelloName(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["helloName"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Entity_findWorldNameByName_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("helloName"))
+	if tmp, ok := rawArgs["helloName"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Entity_findWorldByHelloNameAndFoo_argsFoo(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["foo"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("foo"))
+	if tmp, ok := rawArgs["foo"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Entity_findWorldNameByName_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 string
-	if tmp, ok := rawArgs["name"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
-		arg0, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field_Entity_findWorldNameByName_argsName(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["name"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Entity_findWorldNameByName_argsName(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["name"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Entity_findWorldWithMultipleKeysByBar_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+	if tmp, ok := rawArgs["name"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Entity_findWorldWithMultipleKeysByBar_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 int
-	if tmp, ok := rawArgs["bar"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("bar"))
-		arg0, err = ec.unmarshalNInt2int(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field_Entity_findWorldWithMultipleKeysByBar_argsBar(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["bar"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Entity_findWorldWithMultipleKeysByBar_argsBar(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (int, error) {
+	if _, ok := rawArgs["bar"]; !ok {
+		var zeroVal int
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Entity_findWorldWithMultipleKeysByHelloNameAndFoo_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("bar"))
+	if tmp, ok := rawArgs["bar"]; ok {
+		return ec.unmarshalNInt2int(ctx, tmp)
+	}
+
+	var zeroVal int
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Entity_findWorldWithMultipleKeysByHelloNameAndFoo_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 string
-	if tmp, ok := rawArgs["helloName"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("helloName"))
-		arg0, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field_Entity_findWorldWithMultipleKeysByHelloNameAndFoo_argsHelloName(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["helloName"] = arg0
-	var arg1 string
-	if tmp, ok := rawArgs["foo"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("foo"))
-		arg1, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	arg1, err := ec.field_Entity_findWorldWithMultipleKeysByHelloNameAndFoo_argsFoo(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["foo"] = arg1
 	return args, nil
 }
+func (ec *executionContext) field_Entity_findWorldWithMultipleKeysByHelloNameAndFoo_argsHelloName(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["helloName"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("helloName"))
+	if tmp, ok := rawArgs["helloName"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Entity_findWorldWithMultipleKeysByHelloNameAndFoo_argsFoo(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["foo"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("foo"))
+	if tmp, ok := rawArgs["foo"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 string
-	if tmp, ok := rawArgs["name"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
-		arg0, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field_Query___type_argsName(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["name"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Query___type_argsName(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["name"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Query__entities_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+	if tmp, ok := rawArgs["name"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query__entities_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 []map[string]interface{}
-	if tmp, ok := rawArgs["representations"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("representations"))
-		arg0, err = ec.unmarshalN_Any2ᚕmapᚄ(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field_Query__entities_argsRepresentations(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["representations"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Query__entities_argsRepresentations(
+	ctx context.Context,
+	rawArgs map[string]any,
+) ([]map[string]any, error) {
+	if _, ok := rawArgs["representations"]; !ok {
+		var zeroVal []map[string]any
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field___Type_enumValues_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("representations"))
+	if tmp, ok := rawArgs["representations"]; ok {
+		return ec.unmarshalN_Any2ᚕmapᚄ(ctx, tmp)
+	}
+
+	var zeroVal []map[string]any
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field___Directive_args_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 bool
-	if tmp, ok := rawArgs["includeDeprecated"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("includeDeprecated"))
-		arg0, err = ec.unmarshalOBoolean2bool(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field___Directive_args_argsIncludeDeprecated(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["includeDeprecated"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field___Directive_args_argsIncludeDeprecated(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*bool, error) {
+	if _, ok := rawArgs["includeDeprecated"]; !ok {
+		var zeroVal *bool
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 bool
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("includeDeprecated"))
 	if tmp, ok := rawArgs["includeDeprecated"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("includeDeprecated"))
-		arg0, err = ec.unmarshalOBoolean2bool(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+		return ec.unmarshalOBoolean2ᚖbool(ctx, tmp)
+	}
+
+	var zeroVal *bool
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field___Field_args_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field___Field_args_argsIncludeDeprecated(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["includeDeprecated"] = arg0
 	return args, nil
+}
+func (ec *executionContext) field___Field_args_argsIncludeDeprecated(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*bool, error) {
+	if _, ok := rawArgs["includeDeprecated"]; !ok {
+		var zeroVal *bool
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("includeDeprecated"))
+	if tmp, ok := rawArgs["includeDeprecated"]; ok {
+		return ec.unmarshalOBoolean2ᚖbool(ctx, tmp)
+	}
+
+	var zeroVal *bool
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field___Type_enumValues_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field___Type_enumValues_argsIncludeDeprecated(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["includeDeprecated"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field___Type_enumValues_argsIncludeDeprecated(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (bool, error) {
+	if _, ok := rawArgs["includeDeprecated"]; !ok {
+		var zeroVal bool
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("includeDeprecated"))
+	if tmp, ok := rawArgs["includeDeprecated"]; ok {
+		return ec.unmarshalOBoolean2bool(ctx, tmp)
+	}
+
+	var zeroVal bool
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field___Type_fields_argsIncludeDeprecated(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["includeDeprecated"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field___Type_fields_argsIncludeDeprecated(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (bool, error) {
+	if _, ok := rawArgs["includeDeprecated"]; !ok {
+		var zeroVal bool
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("includeDeprecated"))
+	if tmp, ok := rawArgs["includeDeprecated"]; ok {
+		return ec.unmarshalOBoolean2bool(ctx, tmp)
+	}
+
+	var zeroVal bool
+	return zeroVal, nil
 }
 
 // endregion ***************************** args.gotpl *****************************
@@ -1178,12 +1549,13 @@ func (ec *executionContext) _Entity_findHelloByName(ctx context.Context, field g
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Entity().FindHelloByName(rctx, fc.Args["name"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
+		return graphql.Null
 	}
 	if resTmp == nil {
 		if !graphql.HasFieldError(ctx, fc) {
@@ -1191,9 +1563,9 @@ func (ec *executionContext) _Entity_findHelloByName(ctx context.Context, field g
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*Hello)
+	res := resTmp.(*model.Hello)
 	fc.Result = res
-	return ec.marshalNHello2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐHello(ctx, field.Selections, res)
+	return ec.marshalNHello2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐHello(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Entity_findHelloByName(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1221,7 +1593,7 @@ func (ec *executionContext) fieldContext_Entity_findHelloByName(ctx context.Cont
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Entity_findHelloByName_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -1238,12 +1610,13 @@ func (ec *executionContext) _Entity_findHelloMultiSingleKeysByKey1AndKey2(ctx co
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Entity().FindHelloMultiSingleKeysByKey1AndKey2(rctx, fc.Args["key1"].(string), fc.Args["key2"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
+		return graphql.Null
 	}
 	if resTmp == nil {
 		if !graphql.HasFieldError(ctx, fc) {
@@ -1251,9 +1624,9 @@ func (ec *executionContext) _Entity_findHelloMultiSingleKeysByKey1AndKey2(ctx co
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*HelloMultiSingleKeys)
+	res := resTmp.(*model.HelloMultiSingleKeys)
 	fc.Result = res
-	return ec.marshalNHelloMultiSingleKeys2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐHelloMultiSingleKeys(ctx, field.Selections, res)
+	return ec.marshalNHelloMultiSingleKeys2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐHelloMultiSingleKeys(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Entity_findHelloMultiSingleKeysByKey1AndKey2(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1281,7 +1654,7 @@ func (ec *executionContext) fieldContext_Entity_findHelloMultiSingleKeysByKey1An
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Entity_findHelloMultiSingleKeysByKey1AndKey2_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -1298,12 +1671,13 @@ func (ec *executionContext) _Entity_findHelloWithErrorsByName(ctx context.Contex
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Entity().FindHelloWithErrorsByName(rctx, fc.Args["name"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
+		return graphql.Null
 	}
 	if resTmp == nil {
 		if !graphql.HasFieldError(ctx, fc) {
@@ -1311,9 +1685,9 @@ func (ec *executionContext) _Entity_findHelloWithErrorsByName(ctx context.Contex
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*HelloWithErrors)
+	res := resTmp.(*model.HelloWithErrors)
 	fc.Result = res
-	return ec.marshalNHelloWithErrors2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐHelloWithErrors(ctx, field.Selections, res)
+	return ec.marshalNHelloWithErrors2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐHelloWithErrors(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Entity_findHelloWithErrorsByName(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1339,7 +1713,7 @@ func (ec *executionContext) fieldContext_Entity_findHelloWithErrorsByName(ctx co
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Entity_findHelloWithErrorsByName_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -1356,43 +1730,20 @@ func (ec *executionContext) _Entity_findManyMultiHelloByNames(ctx context.Contex
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Entity().FindManyMultiHelloByNames(rctx, fc.Args["reps"].([]*MultiHelloByNamesInput))
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			multi, err := ec.unmarshalOBoolean2ᚖbool(ctx, true)
-			if err != nil {
-				return nil, err
-			}
-			if ec.directives.EntityResolver == nil {
-				return nil, errors.New("directive entityResolver is not implemented")
-			}
-			return ec.directives.EntityResolver(ctx, nil, directive0, multi)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.([]*MultiHello); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be []*github.com/99designs/gqlgen/plugin/federation/testdata/entityresolver/generated.MultiHello`, tmp)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Entity().FindManyMultiHelloByNames(rctx, fc.Args["reps"].([]*model.MultiHelloByNamesInput))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
+		return graphql.Null
 	}
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.([]*MultiHello)
+	res := resTmp.([]*model.MultiHello)
 	fc.Result = res
-	return ec.marshalOMultiHello2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHello(ctx, field.Selections, res)
+	return ec.marshalOMultiHello2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHello(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Entity_findManyMultiHelloByNames(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1418,7 +1769,7 @@ func (ec *executionContext) fieldContext_Entity_findManyMultiHelloByNames(ctx co
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Entity_findManyMultiHelloByNames_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -1435,43 +1786,20 @@ func (ec *executionContext) _Entity_findManyMultiHelloMultipleRequiresByNames(ct
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Entity().FindManyMultiHelloMultipleRequiresByNames(rctx, fc.Args["reps"].([]*MultiHelloMultipleRequiresByNamesInput))
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			multi, err := ec.unmarshalOBoolean2ᚖbool(ctx, true)
-			if err != nil {
-				return nil, err
-			}
-			if ec.directives.EntityResolver == nil {
-				return nil, errors.New("directive entityResolver is not implemented")
-			}
-			return ec.directives.EntityResolver(ctx, nil, directive0, multi)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.([]*MultiHelloMultipleRequires); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be []*github.com/99designs/gqlgen/plugin/federation/testdata/entityresolver/generated.MultiHelloMultipleRequires`, tmp)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Entity().FindManyMultiHelloMultipleRequiresByNames(rctx, fc.Args["reps"].([]*model.MultiHelloMultipleRequiresByNamesInput))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
+		return graphql.Null
 	}
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.([]*MultiHelloMultipleRequires)
+	res := resTmp.([]*model.MultiHelloMultipleRequires)
 	fc.Result = res
-	return ec.marshalOMultiHelloMultipleRequires2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloMultipleRequires(ctx, field.Selections, res)
+	return ec.marshalOMultiHelloMultipleRequires2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloMultipleRequires(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Entity_findManyMultiHelloMultipleRequiresByNames(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1503,7 +1831,7 @@ func (ec *executionContext) fieldContext_Entity_findManyMultiHelloMultipleRequir
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Entity_findManyMultiHelloMultipleRequiresByNames_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -1520,43 +1848,20 @@ func (ec *executionContext) _Entity_findManyMultiHelloRequiresByNames(ctx contex
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Entity().FindManyMultiHelloRequiresByNames(rctx, fc.Args["reps"].([]*MultiHelloRequiresByNamesInput))
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			multi, err := ec.unmarshalOBoolean2ᚖbool(ctx, true)
-			if err != nil {
-				return nil, err
-			}
-			if ec.directives.EntityResolver == nil {
-				return nil, errors.New("directive entityResolver is not implemented")
-			}
-			return ec.directives.EntityResolver(ctx, nil, directive0, multi)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.([]*MultiHelloRequires); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be []*github.com/99designs/gqlgen/plugin/federation/testdata/entityresolver/generated.MultiHelloRequires`, tmp)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Entity().FindManyMultiHelloRequiresByNames(rctx, fc.Args["reps"].([]*model.MultiHelloRequiresByNamesInput))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
+		return graphql.Null
 	}
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.([]*MultiHelloRequires)
+	res := resTmp.([]*model.MultiHelloRequires)
 	fc.Result = res
-	return ec.marshalOMultiHelloRequires2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloRequires(ctx, field.Selections, res)
+	return ec.marshalOMultiHelloRequires2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloRequires(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Entity_findManyMultiHelloRequiresByNames(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1586,7 +1891,7 @@ func (ec *executionContext) fieldContext_Entity_findManyMultiHelloRequiresByName
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Entity_findManyMultiHelloRequiresByNames_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -1603,43 +1908,20 @@ func (ec *executionContext) _Entity_findManyMultiHelloWithErrorByNames(ctx conte
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Entity().FindManyMultiHelloWithErrorByNames(rctx, fc.Args["reps"].([]*MultiHelloWithErrorByNamesInput))
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			multi, err := ec.unmarshalOBoolean2ᚖbool(ctx, true)
-			if err != nil {
-				return nil, err
-			}
-			if ec.directives.EntityResolver == nil {
-				return nil, errors.New("directive entityResolver is not implemented")
-			}
-			return ec.directives.EntityResolver(ctx, nil, directive0, multi)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.([]*MultiHelloWithError); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be []*github.com/99designs/gqlgen/plugin/federation/testdata/entityresolver/generated.MultiHelloWithError`, tmp)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Entity().FindManyMultiHelloWithErrorByNames(rctx, fc.Args["reps"].([]*model.MultiHelloWithErrorByNamesInput))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
+		return graphql.Null
 	}
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.([]*MultiHelloWithError)
+	res := resTmp.([]*model.MultiHelloWithError)
 	fc.Result = res
-	return ec.marshalOMultiHelloWithError2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloWithError(ctx, field.Selections, res)
+	return ec.marshalOMultiHelloWithError2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloWithError(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Entity_findManyMultiHelloWithErrorByNames(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1665,7 +1947,7 @@ func (ec *executionContext) fieldContext_Entity_findManyMultiHelloWithErrorByNam
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Entity_findManyMultiHelloWithErrorByNames_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -1682,43 +1964,20 @@ func (ec *executionContext) _Entity_findManyMultiPlanetRequiresNestedByNames(ctx
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Entity().FindManyMultiPlanetRequiresNestedByNames(rctx, fc.Args["reps"].([]*MultiPlanetRequiresNestedByNamesInput))
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			multi, err := ec.unmarshalOBoolean2ᚖbool(ctx, true)
-			if err != nil {
-				return nil, err
-			}
-			if ec.directives.EntityResolver == nil {
-				return nil, errors.New("directive entityResolver is not implemented")
-			}
-			return ec.directives.EntityResolver(ctx, nil, directive0, multi)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.([]*MultiPlanetRequiresNested); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be []*github.com/99designs/gqlgen/plugin/federation/testdata/entityresolver/generated.MultiPlanetRequiresNested`, tmp)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Entity().FindManyMultiPlanetRequiresNestedByNames(rctx, fc.Args["reps"].([]*model.MultiPlanetRequiresNestedByNamesInput))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
+		return graphql.Null
 	}
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.([]*MultiPlanetRequiresNested)
+	res := resTmp.([]*model.MultiPlanetRequiresNested)
 	fc.Result = res
-	return ec.marshalOMultiPlanetRequiresNested2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiPlanetRequiresNested(ctx, field.Selections, res)
+	return ec.marshalOMultiPlanetRequiresNested2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiPlanetRequiresNested(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Entity_findManyMultiPlanetRequiresNestedByNames(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1748,7 +2007,7 @@ func (ec *executionContext) fieldContext_Entity_findManyMultiPlanetRequiresNeste
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Entity_findManyMultiPlanetRequiresNestedByNames_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -1765,12 +2024,13 @@ func (ec *executionContext) _Entity_findPlanetMultipleRequiresByName(ctx context
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Entity().FindPlanetMultipleRequiresByName(rctx, fc.Args["name"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
+		return graphql.Null
 	}
 	if resTmp == nil {
 		if !graphql.HasFieldError(ctx, fc) {
@@ -1778,9 +2038,9 @@ func (ec *executionContext) _Entity_findPlanetMultipleRequiresByName(ctx context
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*PlanetMultipleRequires)
+	res := resTmp.(*model.PlanetMultipleRequires)
 	fc.Result = res
-	return ec.marshalNPlanetMultipleRequires2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐPlanetMultipleRequires(ctx, field.Selections, res)
+	return ec.marshalNPlanetMultipleRequires2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐPlanetMultipleRequires(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Entity_findPlanetMultipleRequiresByName(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1812,7 +2072,7 @@ func (ec *executionContext) fieldContext_Entity_findPlanetMultipleRequiresByName
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Entity_findPlanetMultipleRequiresByName_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -1829,12 +2089,13 @@ func (ec *executionContext) _Entity_findPlanetRequiresByName(ctx context.Context
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Entity().FindPlanetRequiresByName(rctx, fc.Args["name"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
+		return graphql.Null
 	}
 	if resTmp == nil {
 		if !graphql.HasFieldError(ctx, fc) {
@@ -1842,9 +2103,9 @@ func (ec *executionContext) _Entity_findPlanetRequiresByName(ctx context.Context
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*PlanetRequires)
+	res := resTmp.(*model.PlanetRequires)
 	fc.Result = res
-	return ec.marshalNPlanetRequires2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐPlanetRequires(ctx, field.Selections, res)
+	return ec.marshalNPlanetRequires2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐPlanetRequires(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Entity_findPlanetRequiresByName(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1874,7 +2135,7 @@ func (ec *executionContext) fieldContext_Entity_findPlanetRequiresByName(ctx con
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Entity_findPlanetRequiresByName_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -1891,12 +2152,13 @@ func (ec *executionContext) _Entity_findPlanetRequiresNestedByName(ctx context.C
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Entity().FindPlanetRequiresNestedByName(rctx, fc.Args["name"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
+		return graphql.Null
 	}
 	if resTmp == nil {
 		if !graphql.HasFieldError(ctx, fc) {
@@ -1904,9 +2166,9 @@ func (ec *executionContext) _Entity_findPlanetRequiresNestedByName(ctx context.C
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*PlanetRequiresNested)
+	res := resTmp.(*model.PlanetRequiresNested)
 	fc.Result = res
-	return ec.marshalNPlanetRequiresNested2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐPlanetRequiresNested(ctx, field.Selections, res)
+	return ec.marshalNPlanetRequiresNested2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐPlanetRequiresNested(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Entity_findPlanetRequiresNestedByName(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1936,7 +2198,7 @@ func (ec *executionContext) fieldContext_Entity_findPlanetRequiresNestedByName(c
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Entity_findPlanetRequiresNestedByName_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -1953,12 +2215,13 @@ func (ec *executionContext) _Entity_findWorldByHelloNameAndFoo(ctx context.Conte
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Entity().FindWorldByHelloNameAndFoo(rctx, fc.Args["helloName"].(string), fc.Args["foo"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
+		return graphql.Null
 	}
 	if resTmp == nil {
 		if !graphql.HasFieldError(ctx, fc) {
@@ -1966,9 +2229,9 @@ func (ec *executionContext) _Entity_findWorldByHelloNameAndFoo(ctx context.Conte
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*World)
+	res := resTmp.(*model.World)
 	fc.Result = res
-	return ec.marshalNWorld2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐWorld(ctx, field.Selections, res)
+	return ec.marshalNWorld2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐWorld(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Entity_findWorldByHelloNameAndFoo(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1998,7 +2261,7 @@ func (ec *executionContext) fieldContext_Entity_findWorldByHelloNameAndFoo(ctx c
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Entity_findWorldByHelloNameAndFoo_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -2015,12 +2278,13 @@ func (ec *executionContext) _Entity_findWorldNameByName(ctx context.Context, fie
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Entity().FindWorldNameByName(rctx, fc.Args["name"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
+		return graphql.Null
 	}
 	if resTmp == nil {
 		if !graphql.HasFieldError(ctx, fc) {
@@ -2028,9 +2292,9 @@ func (ec *executionContext) _Entity_findWorldNameByName(ctx context.Context, fie
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*WorldName)
+	res := resTmp.(*model.WorldName)
 	fc.Result = res
-	return ec.marshalNWorldName2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐWorldName(ctx, field.Selections, res)
+	return ec.marshalNWorldName2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐWorldName(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Entity_findWorldNameByName(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -2056,7 +2320,7 @@ func (ec *executionContext) fieldContext_Entity_findWorldNameByName(ctx context.
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Entity_findWorldNameByName_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -2073,12 +2337,13 @@ func (ec *executionContext) _Entity_findWorldWithMultipleKeysByHelloNameAndFoo(c
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Entity().FindWorldWithMultipleKeysByHelloNameAndFoo(rctx, fc.Args["helloName"].(string), fc.Args["foo"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
+		return graphql.Null
 	}
 	if resTmp == nil {
 		if !graphql.HasFieldError(ctx, fc) {
@@ -2086,9 +2351,9 @@ func (ec *executionContext) _Entity_findWorldWithMultipleKeysByHelloNameAndFoo(c
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*WorldWithMultipleKeys)
+	res := resTmp.(*model.WorldWithMultipleKeys)
 	fc.Result = res
-	return ec.marshalNWorldWithMultipleKeys2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐWorldWithMultipleKeys(ctx, field.Selections, res)
+	return ec.marshalNWorldWithMultipleKeys2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐWorldWithMultipleKeys(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Entity_findWorldWithMultipleKeysByHelloNameAndFoo(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -2118,7 +2383,7 @@ func (ec *executionContext) fieldContext_Entity_findWorldWithMultipleKeysByHello
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Entity_findWorldWithMultipleKeysByHelloNameAndFoo_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -2135,12 +2400,13 @@ func (ec *executionContext) _Entity_findWorldWithMultipleKeysByBar(ctx context.C
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Entity().FindWorldWithMultipleKeysByBar(rctx, fc.Args["bar"].(int))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
+		return graphql.Null
 	}
 	if resTmp == nil {
 		if !graphql.HasFieldError(ctx, fc) {
@@ -2148,9 +2414,9 @@ func (ec *executionContext) _Entity_findWorldWithMultipleKeysByBar(ctx context.C
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*WorldWithMultipleKeys)
+	res := resTmp.(*model.WorldWithMultipleKeys)
 	fc.Result = res
-	return ec.marshalNWorldWithMultipleKeys2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐWorldWithMultipleKeys(ctx, field.Selections, res)
+	return ec.marshalNWorldWithMultipleKeys2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐWorldWithMultipleKeys(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Entity_findWorldWithMultipleKeysByBar(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -2180,12 +2446,12 @@ func (ec *executionContext) fieldContext_Entity_findWorldWithMultipleKeysByBar(c
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Entity_findWorldWithMultipleKeysByBar_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
 
-func (ec *executionContext) _Hello_name(ctx context.Context, field graphql.CollectedField, obj *Hello) (ret graphql.Marshaler) {
+func (ec *executionContext) _Hello_name(ctx context.Context, field graphql.CollectedField, obj *model.Hello) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Hello_name(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -2197,7 +2463,7 @@ func (ec *executionContext) _Hello_name(ctx context.Context, field graphql.Colle
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -2216,7 +2482,7 @@ func (ec *executionContext) _Hello_name(ctx context.Context, field graphql.Colle
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Hello_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Hello_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Hello",
 		Field:      field,
@@ -2229,7 +2495,7 @@ func (ec *executionContext) fieldContext_Hello_name(ctx context.Context, field g
 	return fc, nil
 }
 
-func (ec *executionContext) _Hello_secondary(ctx context.Context, field graphql.CollectedField, obj *Hello) (ret graphql.Marshaler) {
+func (ec *executionContext) _Hello_secondary(ctx context.Context, field graphql.CollectedField, obj *model.Hello) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Hello_secondary(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -2241,7 +2507,7 @@ func (ec *executionContext) _Hello_secondary(ctx context.Context, field graphql.
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Secondary, nil
 	})
@@ -2260,7 +2526,7 @@ func (ec *executionContext) _Hello_secondary(ctx context.Context, field graphql.
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Hello_secondary(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Hello_secondary(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Hello",
 		Field:      field,
@@ -2273,7 +2539,7 @@ func (ec *executionContext) fieldContext_Hello_secondary(ctx context.Context, fi
 	return fc, nil
 }
 
-func (ec *executionContext) _HelloMultiSingleKeys_key1(ctx context.Context, field graphql.CollectedField, obj *HelloMultiSingleKeys) (ret graphql.Marshaler) {
+func (ec *executionContext) _HelloMultiSingleKeys_key1(ctx context.Context, field graphql.CollectedField, obj *model.HelloMultiSingleKeys) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_HelloMultiSingleKeys_key1(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -2285,7 +2551,7 @@ func (ec *executionContext) _HelloMultiSingleKeys_key1(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Key1, nil
 	})
@@ -2304,7 +2570,7 @@ func (ec *executionContext) _HelloMultiSingleKeys_key1(ctx context.Context, fiel
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_HelloMultiSingleKeys_key1(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_HelloMultiSingleKeys_key1(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "HelloMultiSingleKeys",
 		Field:      field,
@@ -2317,7 +2583,7 @@ func (ec *executionContext) fieldContext_HelloMultiSingleKeys_key1(ctx context.C
 	return fc, nil
 }
 
-func (ec *executionContext) _HelloMultiSingleKeys_key2(ctx context.Context, field graphql.CollectedField, obj *HelloMultiSingleKeys) (ret graphql.Marshaler) {
+func (ec *executionContext) _HelloMultiSingleKeys_key2(ctx context.Context, field graphql.CollectedField, obj *model.HelloMultiSingleKeys) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_HelloMultiSingleKeys_key2(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -2329,7 +2595,7 @@ func (ec *executionContext) _HelloMultiSingleKeys_key2(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Key2, nil
 	})
@@ -2348,7 +2614,7 @@ func (ec *executionContext) _HelloMultiSingleKeys_key2(ctx context.Context, fiel
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_HelloMultiSingleKeys_key2(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_HelloMultiSingleKeys_key2(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "HelloMultiSingleKeys",
 		Field:      field,
@@ -2361,7 +2627,7 @@ func (ec *executionContext) fieldContext_HelloMultiSingleKeys_key2(ctx context.C
 	return fc, nil
 }
 
-func (ec *executionContext) _HelloWithErrors_name(ctx context.Context, field graphql.CollectedField, obj *HelloWithErrors) (ret graphql.Marshaler) {
+func (ec *executionContext) _HelloWithErrors_name(ctx context.Context, field graphql.CollectedField, obj *model.HelloWithErrors) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_HelloWithErrors_name(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -2373,7 +2639,7 @@ func (ec *executionContext) _HelloWithErrors_name(ctx context.Context, field gra
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -2392,7 +2658,7 @@ func (ec *executionContext) _HelloWithErrors_name(ctx context.Context, field gra
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_HelloWithErrors_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_HelloWithErrors_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "HelloWithErrors",
 		Field:      field,
@@ -2405,7 +2671,7 @@ func (ec *executionContext) fieldContext_HelloWithErrors_name(ctx context.Contex
 	return fc, nil
 }
 
-func (ec *executionContext) _MultiHello_name(ctx context.Context, field graphql.CollectedField, obj *MultiHello) (ret graphql.Marshaler) {
+func (ec *executionContext) _MultiHello_name(ctx context.Context, field graphql.CollectedField, obj *model.MultiHello) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_MultiHello_name(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -2417,7 +2683,7 @@ func (ec *executionContext) _MultiHello_name(ctx context.Context, field graphql.
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -2436,7 +2702,7 @@ func (ec *executionContext) _MultiHello_name(ctx context.Context, field graphql.
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_MultiHello_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_MultiHello_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MultiHello",
 		Field:      field,
@@ -2449,7 +2715,7 @@ func (ec *executionContext) fieldContext_MultiHello_name(ctx context.Context, fi
 	return fc, nil
 }
 
-func (ec *executionContext) _MultiHelloMultipleRequires_name(ctx context.Context, field graphql.CollectedField, obj *MultiHelloMultipleRequires) (ret graphql.Marshaler) {
+func (ec *executionContext) _MultiHelloMultipleRequires_name(ctx context.Context, field graphql.CollectedField, obj *model.MultiHelloMultipleRequires) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_MultiHelloMultipleRequires_name(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -2461,7 +2727,7 @@ func (ec *executionContext) _MultiHelloMultipleRequires_name(ctx context.Context
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -2480,7 +2746,7 @@ func (ec *executionContext) _MultiHelloMultipleRequires_name(ctx context.Context
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_MultiHelloMultipleRequires_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_MultiHelloMultipleRequires_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MultiHelloMultipleRequires",
 		Field:      field,
@@ -2493,7 +2759,7 @@ func (ec *executionContext) fieldContext_MultiHelloMultipleRequires_name(ctx con
 	return fc, nil
 }
 
-func (ec *executionContext) _MultiHelloMultipleRequires_key1(ctx context.Context, field graphql.CollectedField, obj *MultiHelloMultipleRequires) (ret graphql.Marshaler) {
+func (ec *executionContext) _MultiHelloMultipleRequires_key1(ctx context.Context, field graphql.CollectedField, obj *model.MultiHelloMultipleRequires) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_MultiHelloMultipleRequires_key1(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -2505,7 +2771,7 @@ func (ec *executionContext) _MultiHelloMultipleRequires_key1(ctx context.Context
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Key1, nil
 	})
@@ -2524,7 +2790,7 @@ func (ec *executionContext) _MultiHelloMultipleRequires_key1(ctx context.Context
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_MultiHelloMultipleRequires_key1(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_MultiHelloMultipleRequires_key1(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MultiHelloMultipleRequires",
 		Field:      field,
@@ -2537,7 +2803,7 @@ func (ec *executionContext) fieldContext_MultiHelloMultipleRequires_key1(ctx con
 	return fc, nil
 }
 
-func (ec *executionContext) _MultiHelloMultipleRequires_key2(ctx context.Context, field graphql.CollectedField, obj *MultiHelloMultipleRequires) (ret graphql.Marshaler) {
+func (ec *executionContext) _MultiHelloMultipleRequires_key2(ctx context.Context, field graphql.CollectedField, obj *model.MultiHelloMultipleRequires) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_MultiHelloMultipleRequires_key2(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -2549,7 +2815,7 @@ func (ec *executionContext) _MultiHelloMultipleRequires_key2(ctx context.Context
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Key2, nil
 	})
@@ -2568,7 +2834,7 @@ func (ec *executionContext) _MultiHelloMultipleRequires_key2(ctx context.Context
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_MultiHelloMultipleRequires_key2(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_MultiHelloMultipleRequires_key2(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MultiHelloMultipleRequires",
 		Field:      field,
@@ -2581,7 +2847,7 @@ func (ec *executionContext) fieldContext_MultiHelloMultipleRequires_key2(ctx con
 	return fc, nil
 }
 
-func (ec *executionContext) _MultiHelloMultipleRequires_key3(ctx context.Context, field graphql.CollectedField, obj *MultiHelloMultipleRequires) (ret graphql.Marshaler) {
+func (ec *executionContext) _MultiHelloMultipleRequires_key3(ctx context.Context, field graphql.CollectedField, obj *model.MultiHelloMultipleRequires) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_MultiHelloMultipleRequires_key3(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -2593,7 +2859,7 @@ func (ec *executionContext) _MultiHelloMultipleRequires_key3(ctx context.Context
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Key3, nil
 	})
@@ -2612,7 +2878,7 @@ func (ec *executionContext) _MultiHelloMultipleRequires_key3(ctx context.Context
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_MultiHelloMultipleRequires_key3(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_MultiHelloMultipleRequires_key3(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MultiHelloMultipleRequires",
 		Field:      field,
@@ -2625,7 +2891,7 @@ func (ec *executionContext) fieldContext_MultiHelloMultipleRequires_key3(ctx con
 	return fc, nil
 }
 
-func (ec *executionContext) _MultiHelloRequires_name(ctx context.Context, field graphql.CollectedField, obj *MultiHelloRequires) (ret graphql.Marshaler) {
+func (ec *executionContext) _MultiHelloRequires_name(ctx context.Context, field graphql.CollectedField, obj *model.MultiHelloRequires) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_MultiHelloRequires_name(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -2637,7 +2903,7 @@ func (ec *executionContext) _MultiHelloRequires_name(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -2656,7 +2922,7 @@ func (ec *executionContext) _MultiHelloRequires_name(ctx context.Context, field 
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_MultiHelloRequires_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_MultiHelloRequires_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MultiHelloRequires",
 		Field:      field,
@@ -2669,7 +2935,7 @@ func (ec *executionContext) fieldContext_MultiHelloRequires_name(ctx context.Con
 	return fc, nil
 }
 
-func (ec *executionContext) _MultiHelloRequires_key1(ctx context.Context, field graphql.CollectedField, obj *MultiHelloRequires) (ret graphql.Marshaler) {
+func (ec *executionContext) _MultiHelloRequires_key1(ctx context.Context, field graphql.CollectedField, obj *model.MultiHelloRequires) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_MultiHelloRequires_key1(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -2681,7 +2947,7 @@ func (ec *executionContext) _MultiHelloRequires_key1(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Key1, nil
 	})
@@ -2700,7 +2966,7 @@ func (ec *executionContext) _MultiHelloRequires_key1(ctx context.Context, field 
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_MultiHelloRequires_key1(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_MultiHelloRequires_key1(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MultiHelloRequires",
 		Field:      field,
@@ -2713,7 +2979,7 @@ func (ec *executionContext) fieldContext_MultiHelloRequires_key1(ctx context.Con
 	return fc, nil
 }
 
-func (ec *executionContext) _MultiHelloRequires_key2(ctx context.Context, field graphql.CollectedField, obj *MultiHelloRequires) (ret graphql.Marshaler) {
+func (ec *executionContext) _MultiHelloRequires_key2(ctx context.Context, field graphql.CollectedField, obj *model.MultiHelloRequires) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_MultiHelloRequires_key2(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -2725,7 +2991,7 @@ func (ec *executionContext) _MultiHelloRequires_key2(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Key2, nil
 	})
@@ -2744,7 +3010,7 @@ func (ec *executionContext) _MultiHelloRequires_key2(ctx context.Context, field 
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_MultiHelloRequires_key2(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_MultiHelloRequires_key2(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MultiHelloRequires",
 		Field:      field,
@@ -2757,7 +3023,7 @@ func (ec *executionContext) fieldContext_MultiHelloRequires_key2(ctx context.Con
 	return fc, nil
 }
 
-func (ec *executionContext) _MultiHelloWithError_name(ctx context.Context, field graphql.CollectedField, obj *MultiHelloWithError) (ret graphql.Marshaler) {
+func (ec *executionContext) _MultiHelloWithError_name(ctx context.Context, field graphql.CollectedField, obj *model.MultiHelloWithError) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_MultiHelloWithError_name(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -2769,7 +3035,7 @@ func (ec *executionContext) _MultiHelloWithError_name(ctx context.Context, field
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -2788,7 +3054,7 @@ func (ec *executionContext) _MultiHelloWithError_name(ctx context.Context, field
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_MultiHelloWithError_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_MultiHelloWithError_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MultiHelloWithError",
 		Field:      field,
@@ -2801,7 +3067,7 @@ func (ec *executionContext) fieldContext_MultiHelloWithError_name(ctx context.Co
 	return fc, nil
 }
 
-func (ec *executionContext) _MultiPlanetRequiresNested_name(ctx context.Context, field graphql.CollectedField, obj *MultiPlanetRequiresNested) (ret graphql.Marshaler) {
+func (ec *executionContext) _MultiPlanetRequiresNested_name(ctx context.Context, field graphql.CollectedField, obj *model.MultiPlanetRequiresNested) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_MultiPlanetRequiresNested_name(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -2813,7 +3079,7 @@ func (ec *executionContext) _MultiPlanetRequiresNested_name(ctx context.Context,
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -2832,7 +3098,7 @@ func (ec *executionContext) _MultiPlanetRequiresNested_name(ctx context.Context,
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_MultiPlanetRequiresNested_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_MultiPlanetRequiresNested_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MultiPlanetRequiresNested",
 		Field:      field,
@@ -2845,7 +3111,7 @@ func (ec *executionContext) fieldContext_MultiPlanetRequiresNested_name(ctx cont
 	return fc, nil
 }
 
-func (ec *executionContext) _MultiPlanetRequiresNested_world(ctx context.Context, field graphql.CollectedField, obj *MultiPlanetRequiresNested) (ret graphql.Marshaler) {
+func (ec *executionContext) _MultiPlanetRequiresNested_world(ctx context.Context, field graphql.CollectedField, obj *model.MultiPlanetRequiresNested) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_MultiPlanetRequiresNested_world(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -2857,7 +3123,7 @@ func (ec *executionContext) _MultiPlanetRequiresNested_world(ctx context.Context
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.World, nil
 	})
@@ -2871,12 +3137,12 @@ func (ec *executionContext) _MultiPlanetRequiresNested_world(ctx context.Context
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*World)
+	res := resTmp.(*model.World)
 	fc.Result = res
-	return ec.marshalNWorld2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐWorld(ctx, field.Selections, res)
+	return ec.marshalNWorld2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐWorld(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_MultiPlanetRequiresNested_world(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_MultiPlanetRequiresNested_world(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MultiPlanetRequiresNested",
 		Field:      field,
@@ -2897,7 +3163,7 @@ func (ec *executionContext) fieldContext_MultiPlanetRequiresNested_world(ctx con
 	return fc, nil
 }
 
-func (ec *executionContext) _MultiPlanetRequiresNested_size(ctx context.Context, field graphql.CollectedField, obj *MultiPlanetRequiresNested) (ret graphql.Marshaler) {
+func (ec *executionContext) _MultiPlanetRequiresNested_size(ctx context.Context, field graphql.CollectedField, obj *model.MultiPlanetRequiresNested) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_MultiPlanetRequiresNested_size(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -2909,7 +3175,7 @@ func (ec *executionContext) _MultiPlanetRequiresNested_size(ctx context.Context,
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Size, nil
 	})
@@ -2928,7 +3194,7 @@ func (ec *executionContext) _MultiPlanetRequiresNested_size(ctx context.Context,
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_MultiPlanetRequiresNested_size(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_MultiPlanetRequiresNested_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MultiPlanetRequiresNested",
 		Field:      field,
@@ -2941,7 +3207,7 @@ func (ec *executionContext) fieldContext_MultiPlanetRequiresNested_size(ctx cont
 	return fc, nil
 }
 
-func (ec *executionContext) _PlanetMultipleRequires_name(ctx context.Context, field graphql.CollectedField, obj *PlanetMultipleRequires) (ret graphql.Marshaler) {
+func (ec *executionContext) _PlanetMultipleRequires_name(ctx context.Context, field graphql.CollectedField, obj *model.PlanetMultipleRequires) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_PlanetMultipleRequires_name(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -2953,7 +3219,7 @@ func (ec *executionContext) _PlanetMultipleRequires_name(ctx context.Context, fi
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -2972,7 +3238,7 @@ func (ec *executionContext) _PlanetMultipleRequires_name(ctx context.Context, fi
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlanetMultipleRequires_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlanetMultipleRequires_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlanetMultipleRequires",
 		Field:      field,
@@ -2985,7 +3251,7 @@ func (ec *executionContext) fieldContext_PlanetMultipleRequires_name(ctx context
 	return fc, nil
 }
 
-func (ec *executionContext) _PlanetMultipleRequires_diameter(ctx context.Context, field graphql.CollectedField, obj *PlanetMultipleRequires) (ret graphql.Marshaler) {
+func (ec *executionContext) _PlanetMultipleRequires_diameter(ctx context.Context, field graphql.CollectedField, obj *model.PlanetMultipleRequires) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_PlanetMultipleRequires_diameter(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -2997,7 +3263,7 @@ func (ec *executionContext) _PlanetMultipleRequires_diameter(ctx context.Context
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Diameter, nil
 	})
@@ -3016,7 +3282,7 @@ func (ec *executionContext) _PlanetMultipleRequires_diameter(ctx context.Context
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlanetMultipleRequires_diameter(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlanetMultipleRequires_diameter(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlanetMultipleRequires",
 		Field:      field,
@@ -3029,7 +3295,7 @@ func (ec *executionContext) fieldContext_PlanetMultipleRequires_diameter(ctx con
 	return fc, nil
 }
 
-func (ec *executionContext) _PlanetMultipleRequires_density(ctx context.Context, field graphql.CollectedField, obj *PlanetMultipleRequires) (ret graphql.Marshaler) {
+func (ec *executionContext) _PlanetMultipleRequires_density(ctx context.Context, field graphql.CollectedField, obj *model.PlanetMultipleRequires) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_PlanetMultipleRequires_density(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -3041,7 +3307,7 @@ func (ec *executionContext) _PlanetMultipleRequires_density(ctx context.Context,
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Density, nil
 	})
@@ -3060,7 +3326,7 @@ func (ec *executionContext) _PlanetMultipleRequires_density(ctx context.Context,
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlanetMultipleRequires_density(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlanetMultipleRequires_density(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlanetMultipleRequires",
 		Field:      field,
@@ -3073,7 +3339,7 @@ func (ec *executionContext) fieldContext_PlanetMultipleRequires_density(ctx cont
 	return fc, nil
 }
 
-func (ec *executionContext) _PlanetMultipleRequires_weight(ctx context.Context, field graphql.CollectedField, obj *PlanetMultipleRequires) (ret graphql.Marshaler) {
+func (ec *executionContext) _PlanetMultipleRequires_weight(ctx context.Context, field graphql.CollectedField, obj *model.PlanetMultipleRequires) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_PlanetMultipleRequires_weight(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -3085,7 +3351,7 @@ func (ec *executionContext) _PlanetMultipleRequires_weight(ctx context.Context, 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Weight, nil
 	})
@@ -3104,7 +3370,7 @@ func (ec *executionContext) _PlanetMultipleRequires_weight(ctx context.Context, 
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlanetMultipleRequires_weight(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlanetMultipleRequires_weight(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlanetMultipleRequires",
 		Field:      field,
@@ -3117,7 +3383,7 @@ func (ec *executionContext) fieldContext_PlanetMultipleRequires_weight(ctx conte
 	return fc, nil
 }
 
-func (ec *executionContext) _PlanetRequires_name(ctx context.Context, field graphql.CollectedField, obj *PlanetRequires) (ret graphql.Marshaler) {
+func (ec *executionContext) _PlanetRequires_name(ctx context.Context, field graphql.CollectedField, obj *model.PlanetRequires) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_PlanetRequires_name(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -3129,7 +3395,7 @@ func (ec *executionContext) _PlanetRequires_name(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -3148,7 +3414,7 @@ func (ec *executionContext) _PlanetRequires_name(ctx context.Context, field grap
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlanetRequires_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlanetRequires_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlanetRequires",
 		Field:      field,
@@ -3161,7 +3427,7 @@ func (ec *executionContext) fieldContext_PlanetRequires_name(ctx context.Context
 	return fc, nil
 }
 
-func (ec *executionContext) _PlanetRequires_size(ctx context.Context, field graphql.CollectedField, obj *PlanetRequires) (ret graphql.Marshaler) {
+func (ec *executionContext) _PlanetRequires_size(ctx context.Context, field graphql.CollectedField, obj *model.PlanetRequires) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_PlanetRequires_size(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -3173,7 +3439,7 @@ func (ec *executionContext) _PlanetRequires_size(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Size, nil
 	})
@@ -3192,7 +3458,7 @@ func (ec *executionContext) _PlanetRequires_size(ctx context.Context, field grap
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlanetRequires_size(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlanetRequires_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlanetRequires",
 		Field:      field,
@@ -3205,7 +3471,7 @@ func (ec *executionContext) fieldContext_PlanetRequires_size(ctx context.Context
 	return fc, nil
 }
 
-func (ec *executionContext) _PlanetRequires_diameter(ctx context.Context, field graphql.CollectedField, obj *PlanetRequires) (ret graphql.Marshaler) {
+func (ec *executionContext) _PlanetRequires_diameter(ctx context.Context, field graphql.CollectedField, obj *model.PlanetRequires) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_PlanetRequires_diameter(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -3217,7 +3483,7 @@ func (ec *executionContext) _PlanetRequires_diameter(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Diameter, nil
 	})
@@ -3236,7 +3502,7 @@ func (ec *executionContext) _PlanetRequires_diameter(ctx context.Context, field 
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlanetRequires_diameter(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlanetRequires_diameter(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlanetRequires",
 		Field:      field,
@@ -3249,7 +3515,7 @@ func (ec *executionContext) fieldContext_PlanetRequires_diameter(ctx context.Con
 	return fc, nil
 }
 
-func (ec *executionContext) _PlanetRequiresNested_name(ctx context.Context, field graphql.CollectedField, obj *PlanetRequiresNested) (ret graphql.Marshaler) {
+func (ec *executionContext) _PlanetRequiresNested_name(ctx context.Context, field graphql.CollectedField, obj *model.PlanetRequiresNested) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_PlanetRequiresNested_name(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -3261,7 +3527,7 @@ func (ec *executionContext) _PlanetRequiresNested_name(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -3280,7 +3546,7 @@ func (ec *executionContext) _PlanetRequiresNested_name(ctx context.Context, fiel
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlanetRequiresNested_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlanetRequiresNested_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlanetRequiresNested",
 		Field:      field,
@@ -3293,7 +3559,7 @@ func (ec *executionContext) fieldContext_PlanetRequiresNested_name(ctx context.C
 	return fc, nil
 }
 
-func (ec *executionContext) _PlanetRequiresNested_world(ctx context.Context, field graphql.CollectedField, obj *PlanetRequiresNested) (ret graphql.Marshaler) {
+func (ec *executionContext) _PlanetRequiresNested_world(ctx context.Context, field graphql.CollectedField, obj *model.PlanetRequiresNested) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_PlanetRequiresNested_world(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -3305,7 +3571,7 @@ func (ec *executionContext) _PlanetRequiresNested_world(ctx context.Context, fie
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.World, nil
 	})
@@ -3319,12 +3585,12 @@ func (ec *executionContext) _PlanetRequiresNested_world(ctx context.Context, fie
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*World)
+	res := resTmp.(*model.World)
 	fc.Result = res
-	return ec.marshalNWorld2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐWorld(ctx, field.Selections, res)
+	return ec.marshalNWorld2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐWorld(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlanetRequiresNested_world(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlanetRequiresNested_world(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlanetRequiresNested",
 		Field:      field,
@@ -3345,7 +3611,7 @@ func (ec *executionContext) fieldContext_PlanetRequiresNested_world(ctx context.
 	return fc, nil
 }
 
-func (ec *executionContext) _PlanetRequiresNested_size(ctx context.Context, field graphql.CollectedField, obj *PlanetRequiresNested) (ret graphql.Marshaler) {
+func (ec *executionContext) _PlanetRequiresNested_size(ctx context.Context, field graphql.CollectedField, obj *model.PlanetRequiresNested) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_PlanetRequiresNested_size(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -3357,7 +3623,7 @@ func (ec *executionContext) _PlanetRequiresNested_size(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Size, nil
 	})
@@ -3376,7 +3642,7 @@ func (ec *executionContext) _PlanetRequiresNested_size(ctx context.Context, fiel
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_PlanetRequiresNested_size(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_PlanetRequiresNested_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlanetRequiresNested",
 		Field:      field,
@@ -3401,12 +3667,13 @@ func (ec *executionContext) _Query__entities(ctx context.Context, field graphql.
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.__resolve_entities(ctx, fc.Args["representations"].([]map[string]interface{})), nil
+		return ec.__resolve_entities(ctx, fc.Args["representations"].([]map[string]any)), nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
+		return graphql.Null
 	}
 	if resTmp == nil {
 		if !graphql.HasFieldError(ctx, fc) {
@@ -3438,7 +3705,7 @@ func (ec *executionContext) fieldContext_Query__entities(ctx context.Context, fi
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query__entities_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -3455,12 +3722,13 @@ func (ec *executionContext) _Query__service(ctx context.Context, field graphql.C
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.__resolve__service(ctx)
 	})
 	if err != nil {
 		ec.Error(ctx, err)
+		return graphql.Null
 	}
 	if resTmp == nil {
 		if !graphql.HasFieldError(ctx, fc) {
@@ -3473,7 +3741,7 @@ func (ec *executionContext) _Query__service(ctx context.Context, field graphql.C
 	return ec.marshalN_Service2githubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋfedruntimeᚐService(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Query__service(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query__service(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -3502,12 +3770,13 @@ func (ec *executionContext) _Query___type(ctx context.Context, field graphql.Col
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.introspectType(fc.Args["name"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
+		return graphql.Null
 	}
 	if resTmp == nil {
 		return graphql.Null
@@ -3545,6 +3814,8 @@ func (ec *executionContext) fieldContext_Query___type(ctx context.Context, field
 				return ec.fieldContext___Type_ofType(ctx, field)
 			case "specifiedByURL":
 				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -3558,7 +3829,7 @@ func (ec *executionContext) fieldContext_Query___type(ctx context.Context, field
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query___type_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -3575,12 +3846,13 @@ func (ec *executionContext) _Query___schema(ctx context.Context, field graphql.C
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.introspectSchema()
 	})
 	if err != nil {
 		ec.Error(ctx, err)
+		return graphql.Null
 	}
 	if resTmp == nil {
 		return graphql.Null
@@ -3590,7 +3862,7 @@ func (ec *executionContext) _Query___schema(ctx context.Context, field graphql.C
 	return ec.marshalO__Schema2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐSchema(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Query___schema(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query___schema(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -3617,7 +3889,7 @@ func (ec *executionContext) fieldContext_Query___schema(ctx context.Context, fie
 	return fc, nil
 }
 
-func (ec *executionContext) _World_foo(ctx context.Context, field graphql.CollectedField, obj *World) (ret graphql.Marshaler) {
+func (ec *executionContext) _World_foo(ctx context.Context, field graphql.CollectedField, obj *model.World) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_World_foo(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -3629,7 +3901,7 @@ func (ec *executionContext) _World_foo(ctx context.Context, field graphql.Collec
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Foo, nil
 	})
@@ -3648,7 +3920,7 @@ func (ec *executionContext) _World_foo(ctx context.Context, field graphql.Collec
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_World_foo(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_World_foo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "World",
 		Field:      field,
@@ -3661,7 +3933,7 @@ func (ec *executionContext) fieldContext_World_foo(ctx context.Context, field gr
 	return fc, nil
 }
 
-func (ec *executionContext) _World_bar(ctx context.Context, field graphql.CollectedField, obj *World) (ret graphql.Marshaler) {
+func (ec *executionContext) _World_bar(ctx context.Context, field graphql.CollectedField, obj *model.World) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_World_bar(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -3673,7 +3945,7 @@ func (ec *executionContext) _World_bar(ctx context.Context, field graphql.Collec
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Bar, nil
 	})
@@ -3692,7 +3964,7 @@ func (ec *executionContext) _World_bar(ctx context.Context, field graphql.Collec
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_World_bar(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_World_bar(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "World",
 		Field:      field,
@@ -3705,7 +3977,7 @@ func (ec *executionContext) fieldContext_World_bar(ctx context.Context, field gr
 	return fc, nil
 }
 
-func (ec *executionContext) _World_hello(ctx context.Context, field graphql.CollectedField, obj *World) (ret graphql.Marshaler) {
+func (ec *executionContext) _World_hello(ctx context.Context, field graphql.CollectedField, obj *model.World) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_World_hello(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -3717,7 +3989,7 @@ func (ec *executionContext) _World_hello(ctx context.Context, field graphql.Coll
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Hello, nil
 	})
@@ -3728,12 +4000,12 @@ func (ec *executionContext) _World_hello(ctx context.Context, field graphql.Coll
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.(*Hello)
+	res := resTmp.(*model.Hello)
 	fc.Result = res
-	return ec.marshalOHello2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐHello(ctx, field.Selections, res)
+	return ec.marshalOHello2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐHello(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_World_hello(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_World_hello(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "World",
 		Field:      field,
@@ -3752,7 +4024,7 @@ func (ec *executionContext) fieldContext_World_hello(ctx context.Context, field 
 	return fc, nil
 }
 
-func (ec *executionContext) _WorldName_name(ctx context.Context, field graphql.CollectedField, obj *WorldName) (ret graphql.Marshaler) {
+func (ec *executionContext) _WorldName_name(ctx context.Context, field graphql.CollectedField, obj *model.WorldName) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_WorldName_name(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -3764,7 +4036,7 @@ func (ec *executionContext) _WorldName_name(ctx context.Context, field graphql.C
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -3783,7 +4055,7 @@ func (ec *executionContext) _WorldName_name(ctx context.Context, field graphql.C
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_WorldName_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_WorldName_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "WorldName",
 		Field:      field,
@@ -3796,7 +4068,7 @@ func (ec *executionContext) fieldContext_WorldName_name(ctx context.Context, fie
 	return fc, nil
 }
 
-func (ec *executionContext) _WorldWithMultipleKeys_foo(ctx context.Context, field graphql.CollectedField, obj *WorldWithMultipleKeys) (ret graphql.Marshaler) {
+func (ec *executionContext) _WorldWithMultipleKeys_foo(ctx context.Context, field graphql.CollectedField, obj *model.WorldWithMultipleKeys) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_WorldWithMultipleKeys_foo(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -3808,7 +4080,7 @@ func (ec *executionContext) _WorldWithMultipleKeys_foo(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Foo, nil
 	})
@@ -3827,7 +4099,7 @@ func (ec *executionContext) _WorldWithMultipleKeys_foo(ctx context.Context, fiel
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_WorldWithMultipleKeys_foo(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_WorldWithMultipleKeys_foo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "WorldWithMultipleKeys",
 		Field:      field,
@@ -3840,7 +4112,7 @@ func (ec *executionContext) fieldContext_WorldWithMultipleKeys_foo(ctx context.C
 	return fc, nil
 }
 
-func (ec *executionContext) _WorldWithMultipleKeys_bar(ctx context.Context, field graphql.CollectedField, obj *WorldWithMultipleKeys) (ret graphql.Marshaler) {
+func (ec *executionContext) _WorldWithMultipleKeys_bar(ctx context.Context, field graphql.CollectedField, obj *model.WorldWithMultipleKeys) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_WorldWithMultipleKeys_bar(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -3852,7 +4124,7 @@ func (ec *executionContext) _WorldWithMultipleKeys_bar(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Bar, nil
 	})
@@ -3871,7 +4143,7 @@ func (ec *executionContext) _WorldWithMultipleKeys_bar(ctx context.Context, fiel
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_WorldWithMultipleKeys_bar(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_WorldWithMultipleKeys_bar(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "WorldWithMultipleKeys",
 		Field:      field,
@@ -3884,7 +4156,7 @@ func (ec *executionContext) fieldContext_WorldWithMultipleKeys_bar(ctx context.C
 	return fc, nil
 }
 
-func (ec *executionContext) _WorldWithMultipleKeys_hello(ctx context.Context, field graphql.CollectedField, obj *WorldWithMultipleKeys) (ret graphql.Marshaler) {
+func (ec *executionContext) _WorldWithMultipleKeys_hello(ctx context.Context, field graphql.CollectedField, obj *model.WorldWithMultipleKeys) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_WorldWithMultipleKeys_hello(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -3896,7 +4168,7 @@ func (ec *executionContext) _WorldWithMultipleKeys_hello(ctx context.Context, fi
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Hello, nil
 	})
@@ -3907,12 +4179,12 @@ func (ec *executionContext) _WorldWithMultipleKeys_hello(ctx context.Context, fi
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.(*Hello)
+	res := resTmp.(*model.Hello)
 	fc.Result = res
-	return ec.marshalOHello2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐHello(ctx, field.Selections, res)
+	return ec.marshalOHello2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐHello(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_WorldWithMultipleKeys_hello(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_WorldWithMultipleKeys_hello(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "WorldWithMultipleKeys",
 		Field:      field,
@@ -3943,7 +4215,7 @@ func (ec *executionContext) __Service_sdl(ctx context.Context, field graphql.Col
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.SDL, nil
 	})
@@ -3959,7 +4231,7 @@ func (ec *executionContext) __Service_sdl(ctx context.Context, field graphql.Col
 	return ec.marshalOString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext__Service_sdl(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext__Service_sdl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "_Service",
 		Field:      field,
@@ -3984,7 +4256,7 @@ func (ec *executionContext) ___Directive_name(ctx context.Context, field graphql
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -4003,7 +4275,7 @@ func (ec *executionContext) ___Directive_name(ctx context.Context, field graphql
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Directive_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Directive_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Directive",
 		Field:      field,
@@ -4028,7 +4300,7 @@ func (ec *executionContext) ___Directive_description(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Description(), nil
 	})
@@ -4044,7 +4316,7 @@ func (ec *executionContext) ___Directive_description(ctx context.Context, field 
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Directive_description(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Directive_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Directive",
 		Field:      field,
@@ -4069,7 +4341,7 @@ func (ec *executionContext) ___Directive_locations(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Locations, nil
 	})
@@ -4088,7 +4360,7 @@ func (ec *executionContext) ___Directive_locations(ctx context.Context, field gr
 	return ec.marshalN__DirectiveLocation2ᚕstringᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Directive_locations(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Directive_locations(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Directive",
 		Field:      field,
@@ -4113,7 +4385,7 @@ func (ec *executionContext) ___Directive_args(ctx context.Context, field graphql
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Args, nil
 	})
@@ -4148,9 +4420,24 @@ func (ec *executionContext) fieldContext___Directive_args(ctx context.Context, f
 				return ec.fieldContext___InputValue_type(ctx, field)
 			case "defaultValue":
 				return ec.fieldContext___InputValue_defaultValue(ctx, field)
+			case "isDeprecated":
+				return ec.fieldContext___InputValue_isDeprecated(ctx, field)
+			case "deprecationReason":
+				return ec.fieldContext___InputValue_deprecationReason(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __InputValue", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field___Directive_args_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -4167,7 +4454,7 @@ func (ec *executionContext) ___Directive_isRepeatable(ctx context.Context, field
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.IsRepeatable, nil
 	})
@@ -4186,7 +4473,7 @@ func (ec *executionContext) ___Directive_isRepeatable(ctx context.Context, field
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Directive_isRepeatable(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Directive_isRepeatable(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Directive",
 		Field:      field,
@@ -4211,7 +4498,7 @@ func (ec *executionContext) ___EnumValue_name(ctx context.Context, field graphql
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -4230,7 +4517,7 @@ func (ec *executionContext) ___EnumValue_name(ctx context.Context, field graphql
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___EnumValue_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___EnumValue_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__EnumValue",
 		Field:      field,
@@ -4255,7 +4542,7 @@ func (ec *executionContext) ___EnumValue_description(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Description(), nil
 	})
@@ -4271,7 +4558,7 @@ func (ec *executionContext) ___EnumValue_description(ctx context.Context, field 
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___EnumValue_description(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___EnumValue_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__EnumValue",
 		Field:      field,
@@ -4296,7 +4583,7 @@ func (ec *executionContext) ___EnumValue_isDeprecated(ctx context.Context, field
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.IsDeprecated(), nil
 	})
@@ -4315,7 +4602,7 @@ func (ec *executionContext) ___EnumValue_isDeprecated(ctx context.Context, field
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___EnumValue_isDeprecated(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___EnumValue_isDeprecated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__EnumValue",
 		Field:      field,
@@ -4340,7 +4627,7 @@ func (ec *executionContext) ___EnumValue_deprecationReason(ctx context.Context, 
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.DeprecationReason(), nil
 	})
@@ -4356,7 +4643,7 @@ func (ec *executionContext) ___EnumValue_deprecationReason(ctx context.Context, 
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___EnumValue_deprecationReason(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___EnumValue_deprecationReason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__EnumValue",
 		Field:      field,
@@ -4381,7 +4668,7 @@ func (ec *executionContext) ___Field_name(ctx context.Context, field graphql.Col
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -4400,7 +4687,7 @@ func (ec *executionContext) ___Field_name(ctx context.Context, field graphql.Col
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Field_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Field_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Field",
 		Field:      field,
@@ -4425,7 +4712,7 @@ func (ec *executionContext) ___Field_description(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Description(), nil
 	})
@@ -4441,7 +4728,7 @@ func (ec *executionContext) ___Field_description(ctx context.Context, field grap
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Field_description(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Field_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Field",
 		Field:      field,
@@ -4466,7 +4753,7 @@ func (ec *executionContext) ___Field_args(ctx context.Context, field graphql.Col
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Args, nil
 	})
@@ -4501,9 +4788,24 @@ func (ec *executionContext) fieldContext___Field_args(ctx context.Context, field
 				return ec.fieldContext___InputValue_type(ctx, field)
 			case "defaultValue":
 				return ec.fieldContext___InputValue_defaultValue(ctx, field)
+			case "isDeprecated":
+				return ec.fieldContext___InputValue_isDeprecated(ctx, field)
+			case "deprecationReason":
+				return ec.fieldContext___InputValue_deprecationReason(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __InputValue", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field___Field_args_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -4520,7 +4822,7 @@ func (ec *executionContext) ___Field_type(ctx context.Context, field graphql.Col
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Type, nil
 	})
@@ -4539,7 +4841,7 @@ func (ec *executionContext) ___Field_type(ctx context.Context, field graphql.Col
 	return ec.marshalN__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Field_type(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Field_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Field",
 		Field:      field,
@@ -4567,6 +4869,8 @@ func (ec *executionContext) fieldContext___Field_type(ctx context.Context, field
 				return ec.fieldContext___Type_ofType(ctx, field)
 			case "specifiedByURL":
 				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -4586,7 +4890,7 @@ func (ec *executionContext) ___Field_isDeprecated(ctx context.Context, field gra
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.IsDeprecated(), nil
 	})
@@ -4605,7 +4909,7 @@ func (ec *executionContext) ___Field_isDeprecated(ctx context.Context, field gra
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Field_isDeprecated(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Field_isDeprecated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Field",
 		Field:      field,
@@ -4630,7 +4934,7 @@ func (ec *executionContext) ___Field_deprecationReason(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.DeprecationReason(), nil
 	})
@@ -4646,7 +4950,7 @@ func (ec *executionContext) ___Field_deprecationReason(ctx context.Context, fiel
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Field_deprecationReason(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Field_deprecationReason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Field",
 		Field:      field,
@@ -4671,7 +4975,7 @@ func (ec *executionContext) ___InputValue_name(ctx context.Context, field graphq
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name, nil
 	})
@@ -4690,7 +4994,7 @@ func (ec *executionContext) ___InputValue_name(ctx context.Context, field graphq
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___InputValue_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___InputValue_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__InputValue",
 		Field:      field,
@@ -4715,7 +5019,7 @@ func (ec *executionContext) ___InputValue_description(ctx context.Context, field
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Description(), nil
 	})
@@ -4731,7 +5035,7 @@ func (ec *executionContext) ___InputValue_description(ctx context.Context, field
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___InputValue_description(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___InputValue_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__InputValue",
 		Field:      field,
@@ -4756,7 +5060,7 @@ func (ec *executionContext) ___InputValue_type(ctx context.Context, field graphq
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Type, nil
 	})
@@ -4775,7 +5079,7 @@ func (ec *executionContext) ___InputValue_type(ctx context.Context, field graphq
 	return ec.marshalN__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___InputValue_type(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___InputValue_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__InputValue",
 		Field:      field,
@@ -4803,6 +5107,8 @@ func (ec *executionContext) fieldContext___InputValue_type(ctx context.Context, 
 				return ec.fieldContext___Type_ofType(ctx, field)
 			case "specifiedByURL":
 				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -4822,7 +5128,7 @@ func (ec *executionContext) ___InputValue_defaultValue(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.DefaultValue, nil
 	})
@@ -4838,11 +5144,96 @@ func (ec *executionContext) ___InputValue_defaultValue(ctx context.Context, fiel
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___InputValue_defaultValue(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___InputValue_defaultValue(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__InputValue",
 		Field:      field,
 		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) ___InputValue_isDeprecated(ctx context.Context, field graphql.CollectedField, obj *introspection.InputValue) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext___InputValue_isDeprecated(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsDeprecated(), nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext___InputValue_isDeprecated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "__InputValue",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) ___InputValue_deprecationReason(ctx context.Context, field graphql.CollectedField, obj *introspection.InputValue) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext___InputValue_deprecationReason(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.DeprecationReason(), nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext___InputValue_deprecationReason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "__InputValue",
+		Field:      field,
+		IsMethod:   true,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
@@ -4863,7 +5254,7 @@ func (ec *executionContext) ___Schema_description(ctx context.Context, field gra
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Description(), nil
 	})
@@ -4879,7 +5270,7 @@ func (ec *executionContext) ___Schema_description(ctx context.Context, field gra
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Schema_description(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Schema_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Schema",
 		Field:      field,
@@ -4904,7 +5295,7 @@ func (ec *executionContext) ___Schema_types(ctx context.Context, field graphql.C
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Types(), nil
 	})
@@ -4923,7 +5314,7 @@ func (ec *executionContext) ___Schema_types(ctx context.Context, field graphql.C
 	return ec.marshalN__Type2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐTypeᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Schema_types(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Schema_types(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Schema",
 		Field:      field,
@@ -4951,6 +5342,8 @@ func (ec *executionContext) fieldContext___Schema_types(ctx context.Context, fie
 				return ec.fieldContext___Type_ofType(ctx, field)
 			case "specifiedByURL":
 				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -4970,7 +5363,7 @@ func (ec *executionContext) ___Schema_queryType(ctx context.Context, field graph
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.QueryType(), nil
 	})
@@ -4989,7 +5382,7 @@ func (ec *executionContext) ___Schema_queryType(ctx context.Context, field graph
 	return ec.marshalN__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Schema_queryType(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Schema_queryType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Schema",
 		Field:      field,
@@ -5017,6 +5410,8 @@ func (ec *executionContext) fieldContext___Schema_queryType(ctx context.Context,
 				return ec.fieldContext___Type_ofType(ctx, field)
 			case "specifiedByURL":
 				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -5036,7 +5431,7 @@ func (ec *executionContext) ___Schema_mutationType(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.MutationType(), nil
 	})
@@ -5052,7 +5447,7 @@ func (ec *executionContext) ___Schema_mutationType(ctx context.Context, field gr
 	return ec.marshalO__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Schema_mutationType(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Schema_mutationType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Schema",
 		Field:      field,
@@ -5080,6 +5475,8 @@ func (ec *executionContext) fieldContext___Schema_mutationType(ctx context.Conte
 				return ec.fieldContext___Type_ofType(ctx, field)
 			case "specifiedByURL":
 				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -5099,7 +5496,7 @@ func (ec *executionContext) ___Schema_subscriptionType(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.SubscriptionType(), nil
 	})
@@ -5115,7 +5512,7 @@ func (ec *executionContext) ___Schema_subscriptionType(ctx context.Context, fiel
 	return ec.marshalO__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Schema_subscriptionType(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Schema_subscriptionType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Schema",
 		Field:      field,
@@ -5143,6 +5540,8 @@ func (ec *executionContext) fieldContext___Schema_subscriptionType(ctx context.C
 				return ec.fieldContext___Type_ofType(ctx, field)
 			case "specifiedByURL":
 				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -5162,7 +5561,7 @@ func (ec *executionContext) ___Schema_directives(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Directives(), nil
 	})
@@ -5181,7 +5580,7 @@ func (ec *executionContext) ___Schema_directives(ctx context.Context, field grap
 	return ec.marshalN__Directive2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirectiveᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Schema_directives(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Schema_directives(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Schema",
 		Field:      field,
@@ -5218,7 +5617,7 @@ func (ec *executionContext) ___Type_kind(ctx context.Context, field graphql.Coll
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Kind(), nil
 	})
@@ -5237,7 +5636,7 @@ func (ec *executionContext) ___Type_kind(ctx context.Context, field graphql.Coll
 	return ec.marshalN__TypeKind2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Type_kind(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Type_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Type",
 		Field:      field,
@@ -5262,7 +5661,7 @@ func (ec *executionContext) ___Type_name(ctx context.Context, field graphql.Coll
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Name(), nil
 	})
@@ -5278,7 +5677,7 @@ func (ec *executionContext) ___Type_name(ctx context.Context, field graphql.Coll
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Type_name(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Type_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Type",
 		Field:      field,
@@ -5303,7 +5702,7 @@ func (ec *executionContext) ___Type_description(ctx context.Context, field graph
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Description(), nil
 	})
@@ -5319,7 +5718,7 @@ func (ec *executionContext) ___Type_description(ctx context.Context, field graph
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Type_description(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Type_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Type",
 		Field:      field,
@@ -5344,7 +5743,7 @@ func (ec *executionContext) ___Type_fields(ctx context.Context, field graphql.Co
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Fields(fc.Args["includeDeprecated"].(bool)), nil
 	})
@@ -5393,7 +5792,7 @@ func (ec *executionContext) fieldContext___Type_fields(ctx context.Context, fiel
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field___Type_fields_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -5410,7 +5809,7 @@ func (ec *executionContext) ___Type_interfaces(ctx context.Context, field graphq
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Interfaces(), nil
 	})
@@ -5426,7 +5825,7 @@ func (ec *executionContext) ___Type_interfaces(ctx context.Context, field graphq
 	return ec.marshalO__Type2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐTypeᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Type_interfaces(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Type_interfaces(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Type",
 		Field:      field,
@@ -5454,6 +5853,8 @@ func (ec *executionContext) fieldContext___Type_interfaces(ctx context.Context, 
 				return ec.fieldContext___Type_ofType(ctx, field)
 			case "specifiedByURL":
 				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -5473,7 +5874,7 @@ func (ec *executionContext) ___Type_possibleTypes(ctx context.Context, field gra
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.PossibleTypes(), nil
 	})
@@ -5489,7 +5890,7 @@ func (ec *executionContext) ___Type_possibleTypes(ctx context.Context, field gra
 	return ec.marshalO__Type2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐTypeᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Type_possibleTypes(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Type_possibleTypes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Type",
 		Field:      field,
@@ -5517,6 +5918,8 @@ func (ec *executionContext) fieldContext___Type_possibleTypes(ctx context.Contex
 				return ec.fieldContext___Type_ofType(ctx, field)
 			case "specifiedByURL":
 				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -5536,7 +5939,7 @@ func (ec *executionContext) ___Type_enumValues(ctx context.Context, field graphq
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.EnumValues(fc.Args["includeDeprecated"].(bool)), nil
 	})
@@ -5581,7 +5984,7 @@ func (ec *executionContext) fieldContext___Type_enumValues(ctx context.Context, 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field___Type_enumValues_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -5598,7 +6001,7 @@ func (ec *executionContext) ___Type_inputFields(ctx context.Context, field graph
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.InputFields(), nil
 	})
@@ -5614,7 +6017,7 @@ func (ec *executionContext) ___Type_inputFields(ctx context.Context, field graph
 	return ec.marshalO__InputValue2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐInputValueᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Type_inputFields(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Type_inputFields(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Type",
 		Field:      field,
@@ -5630,6 +6033,10 @@ func (ec *executionContext) fieldContext___Type_inputFields(ctx context.Context,
 				return ec.fieldContext___InputValue_type(ctx, field)
 			case "defaultValue":
 				return ec.fieldContext___InputValue_defaultValue(ctx, field)
+			case "isDeprecated":
+				return ec.fieldContext___InputValue_isDeprecated(ctx, field)
+			case "deprecationReason":
+				return ec.fieldContext___InputValue_deprecationReason(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __InputValue", field.Name)
 		},
@@ -5649,7 +6056,7 @@ func (ec *executionContext) ___Type_ofType(ctx context.Context, field graphql.Co
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.OfType(), nil
 	})
@@ -5665,7 +6072,7 @@ func (ec *executionContext) ___Type_ofType(ctx context.Context, field graphql.Co
 	return ec.marshalO__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Type_ofType(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Type_ofType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Type",
 		Field:      field,
@@ -5693,6 +6100,8 @@ func (ec *executionContext) fieldContext___Type_ofType(ctx context.Context, fiel
 				return ec.fieldContext___Type_ofType(ctx, field)
 			case "specifiedByURL":
 				return ec.fieldContext___Type_specifiedByURL(ctx, field)
+			case "isOneOf":
+				return ec.fieldContext___Type_isOneOf(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Type", field.Name)
 		},
@@ -5712,7 +6121,7 @@ func (ec *executionContext) ___Type_specifiedByURL(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.SpecifiedByURL(), nil
 	})
@@ -5728,7 +6137,7 @@ func (ec *executionContext) ___Type_specifiedByURL(ctx context.Context, field gr
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext___Type_specifiedByURL(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext___Type_specifiedByURL(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "__Type",
 		Field:      field,
@@ -5741,14 +6150,55 @@ func (ec *executionContext) fieldContext___Type_specifiedByURL(ctx context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) ___Type_isOneOf(ctx context.Context, field graphql.CollectedField, obj *introspection.Type) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext___Type_isOneOf(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsOneOf(), nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalOBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext___Type_isOneOf(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "__Type",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 // endregion **************************** field.gotpl *****************************
 
 // region    **************************** input.gotpl *****************************
 
-func (ec *executionContext) unmarshalInputMultiHelloByNamesInput(ctx context.Context, obj interface{}) (MultiHelloByNamesInput, error) {
-	var it MultiHelloByNamesInput
-	asMap := map[string]interface{}{}
-	for k, v := range obj.(map[string]interface{}) {
+func (ec *executionContext) unmarshalInputMultiHelloByNamesInput(ctx context.Context, obj any) (model.MultiHelloByNamesInput, error) {
+	var it model.MultiHelloByNamesInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
 	}
 
@@ -5760,23 +6210,22 @@ func (ec *executionContext) unmarshalInputMultiHelloByNamesInput(ctx context.Con
 		}
 		switch k {
 		case "Name":
-			var err error
-
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("Name"))
-			it.Name, err = ec.unmarshalNString2string(ctx, v)
+			data, err := ec.unmarshalNString2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
+			it.Name = data
 		}
 	}
 
 	return it, nil
 }
 
-func (ec *executionContext) unmarshalInputMultiHelloMultipleRequiresByNamesInput(ctx context.Context, obj interface{}) (MultiHelloMultipleRequiresByNamesInput, error) {
-	var it MultiHelloMultipleRequiresByNamesInput
-	asMap := map[string]interface{}{}
-	for k, v := range obj.(map[string]interface{}) {
+func (ec *executionContext) unmarshalInputMultiHelloMultipleRequiresByNamesInput(ctx context.Context, obj any) (model.MultiHelloMultipleRequiresByNamesInput, error) {
+	var it model.MultiHelloMultipleRequiresByNamesInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
 	}
 
@@ -5788,23 +6237,22 @@ func (ec *executionContext) unmarshalInputMultiHelloMultipleRequiresByNamesInput
 		}
 		switch k {
 		case "Name":
-			var err error
-
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("Name"))
-			it.Name, err = ec.unmarshalNString2string(ctx, v)
+			data, err := ec.unmarshalNString2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
+			it.Name = data
 		}
 	}
 
 	return it, nil
 }
 
-func (ec *executionContext) unmarshalInputMultiHelloRequiresByNamesInput(ctx context.Context, obj interface{}) (MultiHelloRequiresByNamesInput, error) {
-	var it MultiHelloRequiresByNamesInput
-	asMap := map[string]interface{}{}
-	for k, v := range obj.(map[string]interface{}) {
+func (ec *executionContext) unmarshalInputMultiHelloRequiresByNamesInput(ctx context.Context, obj any) (model.MultiHelloRequiresByNamesInput, error) {
+	var it model.MultiHelloRequiresByNamesInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
 	}
 
@@ -5816,23 +6264,22 @@ func (ec *executionContext) unmarshalInputMultiHelloRequiresByNamesInput(ctx con
 		}
 		switch k {
 		case "Name":
-			var err error
-
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("Name"))
-			it.Name, err = ec.unmarshalNString2string(ctx, v)
+			data, err := ec.unmarshalNString2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
+			it.Name = data
 		}
 	}
 
 	return it, nil
 }
 
-func (ec *executionContext) unmarshalInputMultiHelloWithErrorByNamesInput(ctx context.Context, obj interface{}) (MultiHelloWithErrorByNamesInput, error) {
-	var it MultiHelloWithErrorByNamesInput
-	asMap := map[string]interface{}{}
-	for k, v := range obj.(map[string]interface{}) {
+func (ec *executionContext) unmarshalInputMultiHelloWithErrorByNamesInput(ctx context.Context, obj any) (model.MultiHelloWithErrorByNamesInput, error) {
+	var it model.MultiHelloWithErrorByNamesInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
 	}
 
@@ -5844,23 +6291,22 @@ func (ec *executionContext) unmarshalInputMultiHelloWithErrorByNamesInput(ctx co
 		}
 		switch k {
 		case "Name":
-			var err error
-
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("Name"))
-			it.Name, err = ec.unmarshalNString2string(ctx, v)
+			data, err := ec.unmarshalNString2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
+			it.Name = data
 		}
 	}
 
 	return it, nil
 }
 
-func (ec *executionContext) unmarshalInputMultiPlanetRequiresNestedByNamesInput(ctx context.Context, obj interface{}) (MultiPlanetRequiresNestedByNamesInput, error) {
-	var it MultiPlanetRequiresNestedByNamesInput
-	asMap := map[string]interface{}{}
-	for k, v := range obj.(map[string]interface{}) {
+func (ec *executionContext) unmarshalInputMultiPlanetRequiresNestedByNamesInput(ctx context.Context, obj any) (model.MultiPlanetRequiresNestedByNamesInput, error) {
+	var it model.MultiPlanetRequiresNestedByNamesInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
 	}
 
@@ -5872,13 +6318,12 @@ func (ec *executionContext) unmarshalInputMultiPlanetRequiresNestedByNamesInput(
 		}
 		switch k {
 		case "Name":
-			var err error
-
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("Name"))
-			it.Name, err = ec.unmarshalNString2string(ctx, v)
+			data, err := ec.unmarshalNString2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
+			it.Name = data
 		}
 	}
 
@@ -5893,100 +6338,100 @@ func (ec *executionContext) __Entity(ctx context.Context, sel ast.SelectionSet, 
 	switch obj := (obj).(type) {
 	case nil:
 		return graphql.Null
-	case Hello:
+	case model.Hello:
 		return ec._Hello(ctx, sel, &obj)
-	case *Hello:
+	case *model.Hello:
 		if obj == nil {
 			return graphql.Null
 		}
 		return ec._Hello(ctx, sel, obj)
-	case HelloMultiSingleKeys:
+	case model.HelloMultiSingleKeys:
 		return ec._HelloMultiSingleKeys(ctx, sel, &obj)
-	case *HelloMultiSingleKeys:
+	case *model.HelloMultiSingleKeys:
 		if obj == nil {
 			return graphql.Null
 		}
 		return ec._HelloMultiSingleKeys(ctx, sel, obj)
-	case HelloWithErrors:
+	case model.HelloWithErrors:
 		return ec._HelloWithErrors(ctx, sel, &obj)
-	case *HelloWithErrors:
+	case *model.HelloWithErrors:
 		if obj == nil {
 			return graphql.Null
 		}
 		return ec._HelloWithErrors(ctx, sel, obj)
-	case MultiHello:
+	case model.MultiHello:
 		return ec._MultiHello(ctx, sel, &obj)
-	case *MultiHello:
+	case *model.MultiHello:
 		if obj == nil {
 			return graphql.Null
 		}
 		return ec._MultiHello(ctx, sel, obj)
-	case MultiHelloMultipleRequires:
+	case model.MultiHelloMultipleRequires:
 		return ec._MultiHelloMultipleRequires(ctx, sel, &obj)
-	case *MultiHelloMultipleRequires:
+	case *model.MultiHelloMultipleRequires:
 		if obj == nil {
 			return graphql.Null
 		}
 		return ec._MultiHelloMultipleRequires(ctx, sel, obj)
-	case MultiHelloRequires:
+	case model.MultiHelloRequires:
 		return ec._MultiHelloRequires(ctx, sel, &obj)
-	case *MultiHelloRequires:
+	case *model.MultiHelloRequires:
 		if obj == nil {
 			return graphql.Null
 		}
 		return ec._MultiHelloRequires(ctx, sel, obj)
-	case MultiHelloWithError:
+	case model.MultiHelloWithError:
 		return ec._MultiHelloWithError(ctx, sel, &obj)
-	case *MultiHelloWithError:
+	case *model.MultiHelloWithError:
 		if obj == nil {
 			return graphql.Null
 		}
 		return ec._MultiHelloWithError(ctx, sel, obj)
-	case MultiPlanetRequiresNested:
+	case model.MultiPlanetRequiresNested:
 		return ec._MultiPlanetRequiresNested(ctx, sel, &obj)
-	case *MultiPlanetRequiresNested:
+	case *model.MultiPlanetRequiresNested:
 		if obj == nil {
 			return graphql.Null
 		}
 		return ec._MultiPlanetRequiresNested(ctx, sel, obj)
-	case PlanetMultipleRequires:
+	case model.PlanetMultipleRequires:
 		return ec._PlanetMultipleRequires(ctx, sel, &obj)
-	case *PlanetMultipleRequires:
+	case *model.PlanetMultipleRequires:
 		if obj == nil {
 			return graphql.Null
 		}
 		return ec._PlanetMultipleRequires(ctx, sel, obj)
-	case PlanetRequires:
+	case model.PlanetRequires:
 		return ec._PlanetRequires(ctx, sel, &obj)
-	case *PlanetRequires:
+	case *model.PlanetRequires:
 		if obj == nil {
 			return graphql.Null
 		}
 		return ec._PlanetRequires(ctx, sel, obj)
-	case PlanetRequiresNested:
+	case model.PlanetRequiresNested:
 		return ec._PlanetRequiresNested(ctx, sel, &obj)
-	case *PlanetRequiresNested:
+	case *model.PlanetRequiresNested:
 		if obj == nil {
 			return graphql.Null
 		}
 		return ec._PlanetRequiresNested(ctx, sel, obj)
-	case World:
+	case model.World:
 		return ec._World(ctx, sel, &obj)
-	case *World:
+	case *model.World:
 		if obj == nil {
 			return graphql.Null
 		}
 		return ec._World(ctx, sel, obj)
-	case WorldName:
+	case model.WorldName:
 		return ec._WorldName(ctx, sel, &obj)
-	case *WorldName:
+	case *model.WorldName:
 		if obj == nil {
 			return graphql.Null
 		}
 		return ec._WorldName(ctx, sel, obj)
-	case WorldWithMultipleKeys:
+	case model.WorldWithMultipleKeys:
 		return ec._WorldWithMultipleKeys(ctx, sel, &obj)
-	case *WorldWithMultipleKeys:
+	case *model.WorldWithMultipleKeys:
 		if obj == nil {
 			return graphql.Null
 		}
@@ -6009,6 +6454,7 @@ func (ec *executionContext) _Entity(ctx context.Context, sel ast.SelectionSet) g
 	})
 
 	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		innerCtx := graphql.WithRootFieldContext(ctx, &graphql.RootFieldContext{
 			Object: field.Name,
@@ -6021,67 +6467,73 @@ func (ec *executionContext) _Entity(ctx context.Context, sel ast.SelectionSet) g
 		case "findHelloByName":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
 				res = ec._Entity_findHelloByName(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
 				return res
 			}
 
 			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "findHelloMultiSingleKeysByKey1AndKey2":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
 				res = ec._Entity_findHelloMultiSingleKeysByKey1AndKey2(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
 				return res
 			}
 
 			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "findHelloWithErrorsByName":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
 				res = ec._Entity_findHelloWithErrorsByName(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
 				return res
 			}
 
 			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "findManyMultiHelloByNames":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -6092,16 +6544,15 @@ func (ec *executionContext) _Entity(ctx context.Context, sel ast.SelectionSet) g
 			}
 
 			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "findManyMultiHelloMultipleRequiresByNames":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -6112,16 +6563,15 @@ func (ec *executionContext) _Entity(ctx context.Context, sel ast.SelectionSet) g
 			}
 
 			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "findManyMultiHelloRequiresByNames":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -6132,16 +6582,15 @@ func (ec *executionContext) _Entity(ctx context.Context, sel ast.SelectionSet) g
 			}
 
 			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "findManyMultiHelloWithErrorByNames":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -6152,16 +6601,15 @@ func (ec *executionContext) _Entity(ctx context.Context, sel ast.SelectionSet) g
 			}
 
 			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "findManyMultiPlanetRequiresNestedByNames":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -6172,577 +6620,694 @@ func (ec *executionContext) _Entity(ctx context.Context, sel ast.SelectionSet) g
 			}
 
 			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "findPlanetMultipleRequiresByName":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
 				res = ec._Entity_findPlanetMultipleRequiresByName(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
 				return res
 			}
 
 			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "findPlanetRequiresByName":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
 				res = ec._Entity_findPlanetRequiresByName(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
 				return res
 			}
 
 			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "findPlanetRequiresNestedByName":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
 				res = ec._Entity_findPlanetRequiresNestedByName(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
 				return res
 			}
 
 			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "findWorldByHelloNameAndFoo":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
 				res = ec._Entity_findWorldByHelloNameAndFoo(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
 				return res
 			}
 
 			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "findWorldNameByName":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
 				res = ec._Entity_findWorldNameByName(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
 				return res
 			}
 
 			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "findWorldWithMultipleKeysByHelloNameAndFoo":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
 				res = ec._Entity_findWorldWithMultipleKeysByHelloNameAndFoo(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
 				return res
 			}
 
 			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "findWorldWithMultipleKeysByBar":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
 				res = ec._Entity_findWorldWithMultipleKeysByBar(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
 				return res
 			}
 
 			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
 var helloImplementors = []string{"Hello", "_Entity"}
 
-func (ec *executionContext) _Hello(ctx context.Context, sel ast.SelectionSet, obj *Hello) graphql.Marshaler {
+func (ec *executionContext) _Hello(ctx context.Context, sel ast.SelectionSet, obj *model.Hello) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, helloImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Hello")
 		case "name":
-
 			out.Values[i] = ec._Hello_name(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "secondary":
-
 			out.Values[i] = ec._Hello_secondary(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
 var helloMultiSingleKeysImplementors = []string{"HelloMultiSingleKeys", "_Entity"}
 
-func (ec *executionContext) _HelloMultiSingleKeys(ctx context.Context, sel ast.SelectionSet, obj *HelloMultiSingleKeys) graphql.Marshaler {
+func (ec *executionContext) _HelloMultiSingleKeys(ctx context.Context, sel ast.SelectionSet, obj *model.HelloMultiSingleKeys) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, helloMultiSingleKeysImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("HelloMultiSingleKeys")
 		case "key1":
-
 			out.Values[i] = ec._HelloMultiSingleKeys_key1(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "key2":
-
 			out.Values[i] = ec._HelloMultiSingleKeys_key2(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
 var helloWithErrorsImplementors = []string{"HelloWithErrors", "_Entity"}
 
-func (ec *executionContext) _HelloWithErrors(ctx context.Context, sel ast.SelectionSet, obj *HelloWithErrors) graphql.Marshaler {
+func (ec *executionContext) _HelloWithErrors(ctx context.Context, sel ast.SelectionSet, obj *model.HelloWithErrors) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, helloWithErrorsImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("HelloWithErrors")
 		case "name":
-
 			out.Values[i] = ec._HelloWithErrors_name(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
 var multiHelloImplementors = []string{"MultiHello", "_Entity"}
 
-func (ec *executionContext) _MultiHello(ctx context.Context, sel ast.SelectionSet, obj *MultiHello) graphql.Marshaler {
+func (ec *executionContext) _MultiHello(ctx context.Context, sel ast.SelectionSet, obj *model.MultiHello) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, multiHelloImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("MultiHello")
 		case "name":
-
 			out.Values[i] = ec._MultiHello_name(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
 var multiHelloMultipleRequiresImplementors = []string{"MultiHelloMultipleRequires", "_Entity"}
 
-func (ec *executionContext) _MultiHelloMultipleRequires(ctx context.Context, sel ast.SelectionSet, obj *MultiHelloMultipleRequires) graphql.Marshaler {
+func (ec *executionContext) _MultiHelloMultipleRequires(ctx context.Context, sel ast.SelectionSet, obj *model.MultiHelloMultipleRequires) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, multiHelloMultipleRequiresImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("MultiHelloMultipleRequires")
 		case "name":
-
 			out.Values[i] = ec._MultiHelloMultipleRequires_name(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "key1":
-
 			out.Values[i] = ec._MultiHelloMultipleRequires_key1(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "key2":
-
 			out.Values[i] = ec._MultiHelloMultipleRequires_key2(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "key3":
-
 			out.Values[i] = ec._MultiHelloMultipleRequires_key3(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
 var multiHelloRequiresImplementors = []string{"MultiHelloRequires", "_Entity"}
 
-func (ec *executionContext) _MultiHelloRequires(ctx context.Context, sel ast.SelectionSet, obj *MultiHelloRequires) graphql.Marshaler {
+func (ec *executionContext) _MultiHelloRequires(ctx context.Context, sel ast.SelectionSet, obj *model.MultiHelloRequires) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, multiHelloRequiresImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("MultiHelloRequires")
 		case "name":
-
 			out.Values[i] = ec._MultiHelloRequires_name(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "key1":
-
 			out.Values[i] = ec._MultiHelloRequires_key1(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "key2":
-
 			out.Values[i] = ec._MultiHelloRequires_key2(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
 var multiHelloWithErrorImplementors = []string{"MultiHelloWithError", "_Entity"}
 
-func (ec *executionContext) _MultiHelloWithError(ctx context.Context, sel ast.SelectionSet, obj *MultiHelloWithError) graphql.Marshaler {
+func (ec *executionContext) _MultiHelloWithError(ctx context.Context, sel ast.SelectionSet, obj *model.MultiHelloWithError) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, multiHelloWithErrorImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("MultiHelloWithError")
 		case "name":
-
 			out.Values[i] = ec._MultiHelloWithError_name(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
 var multiPlanetRequiresNestedImplementors = []string{"MultiPlanetRequiresNested", "_Entity"}
 
-func (ec *executionContext) _MultiPlanetRequiresNested(ctx context.Context, sel ast.SelectionSet, obj *MultiPlanetRequiresNested) graphql.Marshaler {
+func (ec *executionContext) _MultiPlanetRequiresNested(ctx context.Context, sel ast.SelectionSet, obj *model.MultiPlanetRequiresNested) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, multiPlanetRequiresNestedImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("MultiPlanetRequiresNested")
 		case "name":
-
 			out.Values[i] = ec._MultiPlanetRequiresNested_name(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "world":
-
 			out.Values[i] = ec._MultiPlanetRequiresNested_world(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "size":
-
 			out.Values[i] = ec._MultiPlanetRequiresNested_size(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
 var planetMultipleRequiresImplementors = []string{"PlanetMultipleRequires", "_Entity"}
 
-func (ec *executionContext) _PlanetMultipleRequires(ctx context.Context, sel ast.SelectionSet, obj *PlanetMultipleRequires) graphql.Marshaler {
+func (ec *executionContext) _PlanetMultipleRequires(ctx context.Context, sel ast.SelectionSet, obj *model.PlanetMultipleRequires) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, planetMultipleRequiresImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("PlanetMultipleRequires")
 		case "name":
-
 			out.Values[i] = ec._PlanetMultipleRequires_name(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "diameter":
-
 			out.Values[i] = ec._PlanetMultipleRequires_diameter(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "density":
-
 			out.Values[i] = ec._PlanetMultipleRequires_density(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "weight":
-
 			out.Values[i] = ec._PlanetMultipleRequires_weight(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
 var planetRequiresImplementors = []string{"PlanetRequires", "_Entity"}
 
-func (ec *executionContext) _PlanetRequires(ctx context.Context, sel ast.SelectionSet, obj *PlanetRequires) graphql.Marshaler {
+func (ec *executionContext) _PlanetRequires(ctx context.Context, sel ast.SelectionSet, obj *model.PlanetRequires) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, planetRequiresImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("PlanetRequires")
 		case "name":
-
 			out.Values[i] = ec._PlanetRequires_name(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "size":
-
 			out.Values[i] = ec._PlanetRequires_size(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "diameter":
-
 			out.Values[i] = ec._PlanetRequires_diameter(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
 var planetRequiresNestedImplementors = []string{"PlanetRequiresNested", "_Entity"}
 
-func (ec *executionContext) _PlanetRequiresNested(ctx context.Context, sel ast.SelectionSet, obj *PlanetRequiresNested) graphql.Marshaler {
+func (ec *executionContext) _PlanetRequiresNested(ctx context.Context, sel ast.SelectionSet, obj *model.PlanetRequiresNested) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, planetRequiresNestedImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("PlanetRequiresNested")
 		case "name":
-
 			out.Values[i] = ec._PlanetRequiresNested_name(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "world":
-
 			out.Values[i] = ec._PlanetRequiresNested_world(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "size":
-
 			out.Values[i] = ec._PlanetRequiresNested_size(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
@@ -6755,6 +7320,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 	})
 
 	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		innerCtx := graphql.WithRootFieldContext(ctx, &graphql.RootFieldContext{
 			Object: field.Name,
@@ -6767,166 +7333,206 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 		case "_entities":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
 				res = ec._Query__entities(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
 				return res
 			}
 
 			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "_service":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
 				res = ec._Query__service(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
 				return res
 			}
 
 			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "__type":
-
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___type(ctx, field)
 			})
-
 		case "__schema":
-
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___schema(ctx, field)
 			})
-
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
 var worldImplementors = []string{"World", "_Entity"}
 
-func (ec *executionContext) _World(ctx context.Context, sel ast.SelectionSet, obj *World) graphql.Marshaler {
+func (ec *executionContext) _World(ctx context.Context, sel ast.SelectionSet, obj *model.World) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, worldImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("World")
 		case "foo":
-
 			out.Values[i] = ec._World_foo(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "bar":
-
 			out.Values[i] = ec._World_bar(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "hello":
-
 			out.Values[i] = ec._World_hello(ctx, field, obj)
-
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
 var worldNameImplementors = []string{"WorldName", "_Entity"}
 
-func (ec *executionContext) _WorldName(ctx context.Context, sel ast.SelectionSet, obj *WorldName) graphql.Marshaler {
+func (ec *executionContext) _WorldName(ctx context.Context, sel ast.SelectionSet, obj *model.WorldName) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, worldNameImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("WorldName")
 		case "name":
-
 			out.Values[i] = ec._WorldName_name(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
 var worldWithMultipleKeysImplementors = []string{"WorldWithMultipleKeys", "_Entity"}
 
-func (ec *executionContext) _WorldWithMultipleKeys(ctx context.Context, sel ast.SelectionSet, obj *WorldWithMultipleKeys) graphql.Marshaler {
+func (ec *executionContext) _WorldWithMultipleKeys(ctx context.Context, sel ast.SelectionSet, obj *model.WorldWithMultipleKeys) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, worldWithMultipleKeysImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("WorldWithMultipleKeys")
 		case "foo":
-
 			out.Values[i] = ec._WorldWithMultipleKeys_foo(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "bar":
-
 			out.Values[i] = ec._WorldWithMultipleKeys_bar(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "hello":
-
 			out.Values[i] = ec._WorldWithMultipleKeys_hello(ctx, field, obj)
-
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
@@ -6934,24 +7540,35 @@ var _ServiceImplementors = []string{"_Service"}
 
 func (ec *executionContext) __Service(ctx context.Context, sel ast.SelectionSet, obj *fedruntime.Service) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, _ServiceImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("_Service")
 		case "sdl":
-
 			out.Values[i] = ec.__Service_sdl(ctx, field, obj)
-
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
@@ -6959,52 +7576,55 @@ var __DirectiveImplementors = []string{"__Directive"}
 
 func (ec *executionContext) ___Directive(ctx context.Context, sel ast.SelectionSet, obj *introspection.Directive) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, __DirectiveImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("__Directive")
 		case "name":
-
 			out.Values[i] = ec.___Directive_name(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "description":
-
 			out.Values[i] = ec.___Directive_description(ctx, field, obj)
-
 		case "locations":
-
 			out.Values[i] = ec.___Directive_locations(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "args":
-
 			out.Values[i] = ec.___Directive_args(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "isRepeatable":
-
 			out.Values[i] = ec.___Directive_isRepeatable(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
@@ -7012,42 +7632,47 @@ var __EnumValueImplementors = []string{"__EnumValue"}
 
 func (ec *executionContext) ___EnumValue(ctx context.Context, sel ast.SelectionSet, obj *introspection.EnumValue) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, __EnumValueImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("__EnumValue")
 		case "name":
-
 			out.Values[i] = ec.___EnumValue_name(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "description":
-
 			out.Values[i] = ec.___EnumValue_description(ctx, field, obj)
-
 		case "isDeprecated":
-
 			out.Values[i] = ec.___EnumValue_isDeprecated(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "deprecationReason":
-
 			out.Values[i] = ec.___EnumValue_deprecationReason(ctx, field, obj)
-
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
@@ -7055,56 +7680,57 @@ var __FieldImplementors = []string{"__Field"}
 
 func (ec *executionContext) ___Field(ctx context.Context, sel ast.SelectionSet, obj *introspection.Field) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, __FieldImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("__Field")
 		case "name":
-
 			out.Values[i] = ec.___Field_name(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "description":
-
 			out.Values[i] = ec.___Field_description(ctx, field, obj)
-
 		case "args":
-
 			out.Values[i] = ec.___Field_args(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "type":
-
 			out.Values[i] = ec.___Field_type(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "isDeprecated":
-
 			out.Values[i] = ec.___Field_isDeprecated(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "deprecationReason":
-
 			out.Values[i] = ec.___Field_deprecationReason(ctx, field, obj)
-
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
@@ -7112,42 +7738,54 @@ var __InputValueImplementors = []string{"__InputValue"}
 
 func (ec *executionContext) ___InputValue(ctx context.Context, sel ast.SelectionSet, obj *introspection.InputValue) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, __InputValueImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("__InputValue")
 		case "name":
-
 			out.Values[i] = ec.___InputValue_name(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "description":
-
 			out.Values[i] = ec.___InputValue_description(ctx, field, obj)
-
 		case "type":
-
 			out.Values[i] = ec.___InputValue_type(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "defaultValue":
-
 			out.Values[i] = ec.___InputValue_defaultValue(ctx, field, obj)
-
+		case "isDeprecated":
+			out.Values[i] = ec.___InputValue_isDeprecated(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deprecationReason":
+			out.Values[i] = ec.___InputValue_deprecationReason(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
@@ -7155,53 +7793,54 @@ var __SchemaImplementors = []string{"__Schema"}
 
 func (ec *executionContext) ___Schema(ctx context.Context, sel ast.SelectionSet, obj *introspection.Schema) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, __SchemaImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("__Schema")
 		case "description":
-
 			out.Values[i] = ec.___Schema_description(ctx, field, obj)
-
 		case "types":
-
 			out.Values[i] = ec.___Schema_types(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "queryType":
-
 			out.Values[i] = ec.___Schema_queryType(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "mutationType":
-
 			out.Values[i] = ec.___Schema_mutationType(ctx, field, obj)
-
 		case "subscriptionType":
-
 			out.Values[i] = ec.___Schema_subscriptionType(ctx, field, obj)
-
 		case "directives":
-
 			out.Values[i] = ec.___Schema_directives(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
@@ -7209,63 +7848,58 @@ var __TypeImplementors = []string{"__Type"}
 
 func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, obj *introspection.Type) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, __TypeImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("__Type")
 		case "kind":
-
 			out.Values[i] = ec.___Type_kind(ctx, field, obj)
-
 			if out.Values[i] == graphql.Null {
-				invalids++
+				out.Invalids++
 			}
 		case "name":
-
 			out.Values[i] = ec.___Type_name(ctx, field, obj)
-
 		case "description":
-
 			out.Values[i] = ec.___Type_description(ctx, field, obj)
-
 		case "fields":
-
 			out.Values[i] = ec.___Type_fields(ctx, field, obj)
-
 		case "interfaces":
-
 			out.Values[i] = ec.___Type_interfaces(ctx, field, obj)
-
 		case "possibleTypes":
-
 			out.Values[i] = ec.___Type_possibleTypes(ctx, field, obj)
-
 		case "enumValues":
-
 			out.Values[i] = ec.___Type_enumValues(ctx, field, obj)
-
 		case "inputFields":
-
 			out.Values[i] = ec.___Type_inputFields(ctx, field, obj)
-
 		case "ofType":
-
 			out.Values[i] = ec.___Type_ofType(ctx, field, obj)
-
 		case "specifiedByURL":
-
 			out.Values[i] = ec.___Type_specifiedByURL(ctx, field, obj)
-
+		case "isOneOf":
+			out.Values[i] = ec.___Type_isOneOf(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
@@ -7273,7 +7907,7 @@ func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, o
 
 // region    ***************************** type.gotpl *****************************
 
-func (ec *executionContext) unmarshalNBoolean2bool(ctx context.Context, v interface{}) (bool, error) {
+func (ec *executionContext) unmarshalNBoolean2bool(ctx context.Context, v any) (bool, error) {
 	res, err := graphql.UnmarshalBoolean(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
@@ -7288,11 +7922,11 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
-func (ec *executionContext) marshalNHello2githubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐHello(ctx context.Context, sel ast.SelectionSet, v Hello) graphql.Marshaler {
+func (ec *executionContext) marshalNHello2githubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐHello(ctx context.Context, sel ast.SelectionSet, v model.Hello) graphql.Marshaler {
 	return ec._Hello(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNHello2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐHello(ctx context.Context, sel ast.SelectionSet, v *Hello) graphql.Marshaler {
+func (ec *executionContext) marshalNHello2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐHello(ctx context.Context, sel ast.SelectionSet, v *model.Hello) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -7302,11 +7936,11 @@ func (ec *executionContext) marshalNHello2ᚖgithubᚗcomᚋ99designsᚋgqlgen�
 	return ec._Hello(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNHelloMultiSingleKeys2githubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐHelloMultiSingleKeys(ctx context.Context, sel ast.SelectionSet, v HelloMultiSingleKeys) graphql.Marshaler {
+func (ec *executionContext) marshalNHelloMultiSingleKeys2githubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐHelloMultiSingleKeys(ctx context.Context, sel ast.SelectionSet, v model.HelloMultiSingleKeys) graphql.Marshaler {
 	return ec._HelloMultiSingleKeys(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNHelloMultiSingleKeys2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐHelloMultiSingleKeys(ctx context.Context, sel ast.SelectionSet, v *HelloMultiSingleKeys) graphql.Marshaler {
+func (ec *executionContext) marshalNHelloMultiSingleKeys2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐHelloMultiSingleKeys(ctx context.Context, sel ast.SelectionSet, v *model.HelloMultiSingleKeys) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -7316,11 +7950,11 @@ func (ec *executionContext) marshalNHelloMultiSingleKeys2ᚖgithubᚗcomᚋ99des
 	return ec._HelloMultiSingleKeys(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNHelloWithErrors2githubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐHelloWithErrors(ctx context.Context, sel ast.SelectionSet, v HelloWithErrors) graphql.Marshaler {
+func (ec *executionContext) marshalNHelloWithErrors2githubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐHelloWithErrors(ctx context.Context, sel ast.SelectionSet, v model.HelloWithErrors) graphql.Marshaler {
 	return ec._HelloWithErrors(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNHelloWithErrors2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐHelloWithErrors(ctx context.Context, sel ast.SelectionSet, v *HelloWithErrors) graphql.Marshaler {
+func (ec *executionContext) marshalNHelloWithErrors2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐHelloWithErrors(ctx context.Context, sel ast.SelectionSet, v *model.HelloWithErrors) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -7330,7 +7964,7 @@ func (ec *executionContext) marshalNHelloWithErrors2ᚖgithubᚗcomᚋ99designs�
 	return ec._HelloWithErrors(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v interface{}) (int, error) {
+func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v any) (int, error) {
 	res, err := graphql.UnmarshalInt(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
@@ -7345,16 +7979,16 @@ func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.Selecti
 	return res
 }
 
-func (ec *executionContext) unmarshalNMultiHelloByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloByNamesInputᚄ(ctx context.Context, v interface{}) ([]*MultiHelloByNamesInput, error) {
-	var vSlice []interface{}
+func (ec *executionContext) unmarshalNMultiHelloByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloByNamesInput(ctx context.Context, v any) ([]*model.MultiHelloByNamesInput, error) {
+	var vSlice []any
 	if v != nil {
 		vSlice = graphql.CoerceList(v)
 	}
 	var err error
-	res := make([]*MultiHelloByNamesInput, len(vSlice))
+	res := make([]*model.MultiHelloByNamesInput, len(vSlice))
 	for i := range vSlice {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalNMultiHelloByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloByNamesInput(ctx, vSlice[i])
+		res[i], err = ec.unmarshalOMultiHelloByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloByNamesInput(ctx, vSlice[i])
 		if err != nil {
 			return nil, err
 		}
@@ -7362,21 +7996,16 @@ func (ec *executionContext) unmarshalNMultiHelloByNamesInput2ᚕᚖgithubᚗcom�
 	return res, nil
 }
 
-func (ec *executionContext) unmarshalNMultiHelloByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloByNamesInput(ctx context.Context, v interface{}) (*MultiHelloByNamesInput, error) {
-	res, err := ec.unmarshalInputMultiHelloByNamesInput(ctx, v)
-	return &res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) unmarshalNMultiHelloMultipleRequiresByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloMultipleRequiresByNamesInputᚄ(ctx context.Context, v interface{}) ([]*MultiHelloMultipleRequiresByNamesInput, error) {
-	var vSlice []interface{}
+func (ec *executionContext) unmarshalNMultiHelloMultipleRequiresByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloMultipleRequiresByNamesInput(ctx context.Context, v any) ([]*model.MultiHelloMultipleRequiresByNamesInput, error) {
+	var vSlice []any
 	if v != nil {
 		vSlice = graphql.CoerceList(v)
 	}
 	var err error
-	res := make([]*MultiHelloMultipleRequiresByNamesInput, len(vSlice))
+	res := make([]*model.MultiHelloMultipleRequiresByNamesInput, len(vSlice))
 	for i := range vSlice {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalNMultiHelloMultipleRequiresByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloMultipleRequiresByNamesInput(ctx, vSlice[i])
+		res[i], err = ec.unmarshalOMultiHelloMultipleRequiresByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloMultipleRequiresByNamesInput(ctx, vSlice[i])
 		if err != nil {
 			return nil, err
 		}
@@ -7384,21 +8013,16 @@ func (ec *executionContext) unmarshalNMultiHelloMultipleRequiresByNamesInput2ᚕ
 	return res, nil
 }
 
-func (ec *executionContext) unmarshalNMultiHelloMultipleRequiresByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloMultipleRequiresByNamesInput(ctx context.Context, v interface{}) (*MultiHelloMultipleRequiresByNamesInput, error) {
-	res, err := ec.unmarshalInputMultiHelloMultipleRequiresByNamesInput(ctx, v)
-	return &res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) unmarshalNMultiHelloRequiresByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloRequiresByNamesInputᚄ(ctx context.Context, v interface{}) ([]*MultiHelloRequiresByNamesInput, error) {
-	var vSlice []interface{}
+func (ec *executionContext) unmarshalNMultiHelloRequiresByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloRequiresByNamesInput(ctx context.Context, v any) ([]*model.MultiHelloRequiresByNamesInput, error) {
+	var vSlice []any
 	if v != nil {
 		vSlice = graphql.CoerceList(v)
 	}
 	var err error
-	res := make([]*MultiHelloRequiresByNamesInput, len(vSlice))
+	res := make([]*model.MultiHelloRequiresByNamesInput, len(vSlice))
 	for i := range vSlice {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalNMultiHelloRequiresByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloRequiresByNamesInput(ctx, vSlice[i])
+		res[i], err = ec.unmarshalOMultiHelloRequiresByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloRequiresByNamesInput(ctx, vSlice[i])
 		if err != nil {
 			return nil, err
 		}
@@ -7406,21 +8030,16 @@ func (ec *executionContext) unmarshalNMultiHelloRequiresByNamesInput2ᚕᚖgithu
 	return res, nil
 }
 
-func (ec *executionContext) unmarshalNMultiHelloRequiresByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloRequiresByNamesInput(ctx context.Context, v interface{}) (*MultiHelloRequiresByNamesInput, error) {
-	res, err := ec.unmarshalInputMultiHelloRequiresByNamesInput(ctx, v)
-	return &res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) unmarshalNMultiHelloWithErrorByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloWithErrorByNamesInputᚄ(ctx context.Context, v interface{}) ([]*MultiHelloWithErrorByNamesInput, error) {
-	var vSlice []interface{}
+func (ec *executionContext) unmarshalNMultiHelloWithErrorByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloWithErrorByNamesInput(ctx context.Context, v any) ([]*model.MultiHelloWithErrorByNamesInput, error) {
+	var vSlice []any
 	if v != nil {
 		vSlice = graphql.CoerceList(v)
 	}
 	var err error
-	res := make([]*MultiHelloWithErrorByNamesInput, len(vSlice))
+	res := make([]*model.MultiHelloWithErrorByNamesInput, len(vSlice))
 	for i := range vSlice {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalNMultiHelloWithErrorByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloWithErrorByNamesInput(ctx, vSlice[i])
+		res[i], err = ec.unmarshalOMultiHelloWithErrorByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloWithErrorByNamesInput(ctx, vSlice[i])
 		if err != nil {
 			return nil, err
 		}
@@ -7428,21 +8047,16 @@ func (ec *executionContext) unmarshalNMultiHelloWithErrorByNamesInput2ᚕᚖgith
 	return res, nil
 }
 
-func (ec *executionContext) unmarshalNMultiHelloWithErrorByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloWithErrorByNamesInput(ctx context.Context, v interface{}) (*MultiHelloWithErrorByNamesInput, error) {
-	res, err := ec.unmarshalInputMultiHelloWithErrorByNamesInput(ctx, v)
-	return &res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) unmarshalNMultiPlanetRequiresNestedByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiPlanetRequiresNestedByNamesInputᚄ(ctx context.Context, v interface{}) ([]*MultiPlanetRequiresNestedByNamesInput, error) {
-	var vSlice []interface{}
+func (ec *executionContext) unmarshalNMultiPlanetRequiresNestedByNamesInput2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiPlanetRequiresNestedByNamesInput(ctx context.Context, v any) ([]*model.MultiPlanetRequiresNestedByNamesInput, error) {
+	var vSlice []any
 	if v != nil {
 		vSlice = graphql.CoerceList(v)
 	}
 	var err error
-	res := make([]*MultiPlanetRequiresNestedByNamesInput, len(vSlice))
+	res := make([]*model.MultiPlanetRequiresNestedByNamesInput, len(vSlice))
 	for i := range vSlice {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalNMultiPlanetRequiresNestedByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiPlanetRequiresNestedByNamesInput(ctx, vSlice[i])
+		res[i], err = ec.unmarshalOMultiPlanetRequiresNestedByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiPlanetRequiresNestedByNamesInput(ctx, vSlice[i])
 		if err != nil {
 			return nil, err
 		}
@@ -7450,16 +8064,11 @@ func (ec *executionContext) unmarshalNMultiPlanetRequiresNestedByNamesInput2ᚕ�
 	return res, nil
 }
 
-func (ec *executionContext) unmarshalNMultiPlanetRequiresNestedByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiPlanetRequiresNestedByNamesInput(ctx context.Context, v interface{}) (*MultiPlanetRequiresNestedByNamesInput, error) {
-	res, err := ec.unmarshalInputMultiPlanetRequiresNestedByNamesInput(ctx, v)
-	return &res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalNPlanetMultipleRequires2githubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐPlanetMultipleRequires(ctx context.Context, sel ast.SelectionSet, v PlanetMultipleRequires) graphql.Marshaler {
+func (ec *executionContext) marshalNPlanetMultipleRequires2githubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐPlanetMultipleRequires(ctx context.Context, sel ast.SelectionSet, v model.PlanetMultipleRequires) graphql.Marshaler {
 	return ec._PlanetMultipleRequires(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNPlanetMultipleRequires2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐPlanetMultipleRequires(ctx context.Context, sel ast.SelectionSet, v *PlanetMultipleRequires) graphql.Marshaler {
+func (ec *executionContext) marshalNPlanetMultipleRequires2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐPlanetMultipleRequires(ctx context.Context, sel ast.SelectionSet, v *model.PlanetMultipleRequires) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -7469,11 +8078,11 @@ func (ec *executionContext) marshalNPlanetMultipleRequires2ᚖgithubᚗcomᚋ99d
 	return ec._PlanetMultipleRequires(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNPlanetRequires2githubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐPlanetRequires(ctx context.Context, sel ast.SelectionSet, v PlanetRequires) graphql.Marshaler {
+func (ec *executionContext) marshalNPlanetRequires2githubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐPlanetRequires(ctx context.Context, sel ast.SelectionSet, v model.PlanetRequires) graphql.Marshaler {
 	return ec._PlanetRequires(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNPlanetRequires2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐPlanetRequires(ctx context.Context, sel ast.SelectionSet, v *PlanetRequires) graphql.Marshaler {
+func (ec *executionContext) marshalNPlanetRequires2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐPlanetRequires(ctx context.Context, sel ast.SelectionSet, v *model.PlanetRequires) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -7483,11 +8092,11 @@ func (ec *executionContext) marshalNPlanetRequires2ᚖgithubᚗcomᚋ99designs�
 	return ec._PlanetRequires(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNPlanetRequiresNested2githubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐPlanetRequiresNested(ctx context.Context, sel ast.SelectionSet, v PlanetRequiresNested) graphql.Marshaler {
+func (ec *executionContext) marshalNPlanetRequiresNested2githubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐPlanetRequiresNested(ctx context.Context, sel ast.SelectionSet, v model.PlanetRequiresNested) graphql.Marshaler {
 	return ec._PlanetRequiresNested(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNPlanetRequiresNested2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐPlanetRequiresNested(ctx context.Context, sel ast.SelectionSet, v *PlanetRequiresNested) graphql.Marshaler {
+func (ec *executionContext) marshalNPlanetRequiresNested2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐPlanetRequiresNested(ctx context.Context, sel ast.SelectionSet, v *model.PlanetRequiresNested) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -7497,7 +8106,7 @@ func (ec *executionContext) marshalNPlanetRequiresNested2ᚖgithubᚗcomᚋ99des
 	return ec._PlanetRequiresNested(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalNString2string(ctx context.Context, v interface{}) (string, error) {
+func (ec *executionContext) unmarshalNString2string(ctx context.Context, v any) (string, error) {
 	res, err := graphql.UnmarshalString(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
@@ -7512,11 +8121,11 @@ func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.S
 	return res
 }
 
-func (ec *executionContext) marshalNWorld2githubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐWorld(ctx context.Context, sel ast.SelectionSet, v World) graphql.Marshaler {
+func (ec *executionContext) marshalNWorld2githubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐWorld(ctx context.Context, sel ast.SelectionSet, v model.World) graphql.Marshaler {
 	return ec._World(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNWorld2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐWorld(ctx context.Context, sel ast.SelectionSet, v *World) graphql.Marshaler {
+func (ec *executionContext) marshalNWorld2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐWorld(ctx context.Context, sel ast.SelectionSet, v *model.World) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -7526,11 +8135,11 @@ func (ec *executionContext) marshalNWorld2ᚖgithubᚗcomᚋ99designsᚋgqlgen�
 	return ec._World(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNWorldName2githubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐWorldName(ctx context.Context, sel ast.SelectionSet, v WorldName) graphql.Marshaler {
+func (ec *executionContext) marshalNWorldName2githubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐWorldName(ctx context.Context, sel ast.SelectionSet, v model.WorldName) graphql.Marshaler {
 	return ec._WorldName(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNWorldName2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐWorldName(ctx context.Context, sel ast.SelectionSet, v *WorldName) graphql.Marshaler {
+func (ec *executionContext) marshalNWorldName2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐWorldName(ctx context.Context, sel ast.SelectionSet, v *model.WorldName) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -7540,11 +8149,11 @@ func (ec *executionContext) marshalNWorldName2ᚖgithubᚗcomᚋ99designsᚋgqlg
 	return ec._WorldName(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNWorldWithMultipleKeys2githubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐWorldWithMultipleKeys(ctx context.Context, sel ast.SelectionSet, v WorldWithMultipleKeys) graphql.Marshaler {
+func (ec *executionContext) marshalNWorldWithMultipleKeys2githubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐWorldWithMultipleKeys(ctx context.Context, sel ast.SelectionSet, v model.WorldWithMultipleKeys) graphql.Marshaler {
 	return ec._WorldWithMultipleKeys(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNWorldWithMultipleKeys2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐWorldWithMultipleKeys(ctx context.Context, sel ast.SelectionSet, v *WorldWithMultipleKeys) graphql.Marshaler {
+func (ec *executionContext) marshalNWorldWithMultipleKeys2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐWorldWithMultipleKeys(ctx context.Context, sel ast.SelectionSet, v *model.WorldWithMultipleKeys) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -7554,12 +8163,12 @@ func (ec *executionContext) marshalNWorldWithMultipleKeys2ᚖgithubᚗcomᚋ99de
 	return ec._WorldWithMultipleKeys(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalN_Any2map(ctx context.Context, v interface{}) (map[string]interface{}, error) {
+func (ec *executionContext) unmarshalN_Any2map(ctx context.Context, v any) (map[string]any, error) {
 	res, err := graphql.UnmarshalMap(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalN_Any2map(ctx context.Context, sel ast.SelectionSet, v map[string]interface{}) graphql.Marshaler {
+func (ec *executionContext) marshalN_Any2map(ctx context.Context, sel ast.SelectionSet, v map[string]any) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -7575,13 +8184,13 @@ func (ec *executionContext) marshalN_Any2map(ctx context.Context, sel ast.Select
 	return res
 }
 
-func (ec *executionContext) unmarshalN_Any2ᚕmapᚄ(ctx context.Context, v interface{}) ([]map[string]interface{}, error) {
-	var vSlice []interface{}
+func (ec *executionContext) unmarshalN_Any2ᚕmapᚄ(ctx context.Context, v any) ([]map[string]any, error) {
+	var vSlice []any
 	if v != nil {
 		vSlice = graphql.CoerceList(v)
 	}
 	var err error
-	res := make([]map[string]interface{}, len(vSlice))
+	res := make([]map[string]any, len(vSlice))
 	for i := range vSlice {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
 		res[i], err = ec.unmarshalN_Any2map(ctx, vSlice[i])
@@ -7592,7 +8201,7 @@ func (ec *executionContext) unmarshalN_Any2ᚕmapᚄ(ctx context.Context, v inte
 	return res, nil
 }
 
-func (ec *executionContext) marshalN_Any2ᚕmapᚄ(ctx context.Context, sel ast.SelectionSet, v []map[string]interface{}) graphql.Marshaler {
+func (ec *executionContext) marshalN_Any2ᚕmapᚄ(ctx context.Context, sel ast.SelectionSet, v []map[string]any) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	for i := range v {
 		ret[i] = ec.marshalN_Any2map(ctx, sel, v[i])
@@ -7645,7 +8254,7 @@ func (ec *executionContext) marshalN_Entity2ᚕgithubᚗcomᚋ99designsᚋgqlgen
 	return ret
 }
 
-func (ec *executionContext) unmarshalN_FieldSet2string(ctx context.Context, v interface{}) (string, error) {
+func (ec *executionContext) unmarshalN_FieldSet2string(ctx context.Context, v any) (string, error) {
 	res, err := graphql.UnmarshalString(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
@@ -7712,7 +8321,7 @@ func (ec *executionContext) marshalN__Directive2ᚕgithubᚗcomᚋ99designsᚋgq
 	return ret
 }
 
-func (ec *executionContext) unmarshalN__DirectiveLocation2string(ctx context.Context, v interface{}) (string, error) {
+func (ec *executionContext) unmarshalN__DirectiveLocation2string(ctx context.Context, v any) (string, error) {
 	res, err := graphql.UnmarshalString(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
@@ -7727,8 +8336,8 @@ func (ec *executionContext) marshalN__DirectiveLocation2string(ctx context.Conte
 	return res
 }
 
-func (ec *executionContext) unmarshalN__DirectiveLocation2ᚕstringᚄ(ctx context.Context, v interface{}) ([]string, error) {
-	var vSlice []interface{}
+func (ec *executionContext) unmarshalN__DirectiveLocation2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
+	var vSlice []any
 	if v != nil {
 		vSlice = graphql.CoerceList(v)
 	}
@@ -7902,7 +8511,7 @@ func (ec *executionContext) marshalN__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgen�
 	return ec.___Type(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalN__TypeKind2string(ctx context.Context, v interface{}) (string, error) {
+func (ec *executionContext) unmarshalN__TypeKind2string(ctx context.Context, v any) (string, error) {
 	res, err := graphql.UnmarshalString(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
@@ -7917,7 +8526,7 @@ func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel a
 	return res
 }
 
-func (ec *executionContext) unmarshalOBoolean2bool(ctx context.Context, v interface{}) (bool, error) {
+func (ec *executionContext) unmarshalOBoolean2bool(ctx context.Context, v any) (bool, error) {
 	res, err := graphql.UnmarshalBoolean(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
@@ -7927,7 +8536,7 @@ func (ec *executionContext) marshalOBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
-func (ec *executionContext) unmarshalOBoolean2ᚖbool(ctx context.Context, v interface{}) (*bool, error) {
+func (ec *executionContext) unmarshalOBoolean2ᚖbool(ctx context.Context, v any) (*bool, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -7943,14 +8552,14 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	return res
 }
 
-func (ec *executionContext) marshalOHello2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐHello(ctx context.Context, sel ast.SelectionSet, v *Hello) graphql.Marshaler {
+func (ec *executionContext) marshalOHello2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐHello(ctx context.Context, sel ast.SelectionSet, v *model.Hello) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._Hello(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalOMultiHello2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHello(ctx context.Context, sel ast.SelectionSet, v []*MultiHello) graphql.Marshaler {
+func (ec *executionContext) marshalOMultiHello2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHello(ctx context.Context, sel ast.SelectionSet, v []*model.MultiHello) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
@@ -7977,7 +8586,7 @@ func (ec *executionContext) marshalOMultiHello2ᚕᚖgithubᚗcomᚋ99designsᚋ
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalOMultiHello2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHello(ctx, sel, v[i])
+			ret[i] = ec.marshalOMultiHello2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHello(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -7991,14 +8600,22 @@ func (ec *executionContext) marshalOMultiHello2ᚕᚖgithubᚗcomᚋ99designsᚋ
 	return ret
 }
 
-func (ec *executionContext) marshalOMultiHello2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHello(ctx context.Context, sel ast.SelectionSet, v *MultiHello) graphql.Marshaler {
+func (ec *executionContext) marshalOMultiHello2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHello(ctx context.Context, sel ast.SelectionSet, v *model.MultiHello) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._MultiHello(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalOMultiHelloMultipleRequires2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloMultipleRequires(ctx context.Context, sel ast.SelectionSet, v []*MultiHelloMultipleRequires) graphql.Marshaler {
+func (ec *executionContext) unmarshalOMultiHelloByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloByNamesInput(ctx context.Context, v any) (*model.MultiHelloByNamesInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputMultiHelloByNamesInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOMultiHelloMultipleRequires2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloMultipleRequires(ctx context.Context, sel ast.SelectionSet, v []*model.MultiHelloMultipleRequires) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
@@ -8025,7 +8642,7 @@ func (ec *executionContext) marshalOMultiHelloMultipleRequires2ᚕᚖgithubᚗco
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalOMultiHelloMultipleRequires2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloMultipleRequires(ctx, sel, v[i])
+			ret[i] = ec.marshalOMultiHelloMultipleRequires2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloMultipleRequires(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -8039,14 +8656,22 @@ func (ec *executionContext) marshalOMultiHelloMultipleRequires2ᚕᚖgithubᚗco
 	return ret
 }
 
-func (ec *executionContext) marshalOMultiHelloMultipleRequires2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloMultipleRequires(ctx context.Context, sel ast.SelectionSet, v *MultiHelloMultipleRequires) graphql.Marshaler {
+func (ec *executionContext) marshalOMultiHelloMultipleRequires2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloMultipleRequires(ctx context.Context, sel ast.SelectionSet, v *model.MultiHelloMultipleRequires) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._MultiHelloMultipleRequires(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalOMultiHelloRequires2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloRequires(ctx context.Context, sel ast.SelectionSet, v []*MultiHelloRequires) graphql.Marshaler {
+func (ec *executionContext) unmarshalOMultiHelloMultipleRequiresByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloMultipleRequiresByNamesInput(ctx context.Context, v any) (*model.MultiHelloMultipleRequiresByNamesInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputMultiHelloMultipleRequiresByNamesInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOMultiHelloRequires2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloRequires(ctx context.Context, sel ast.SelectionSet, v []*model.MultiHelloRequires) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
@@ -8073,7 +8698,7 @@ func (ec *executionContext) marshalOMultiHelloRequires2ᚕᚖgithubᚗcomᚋ99de
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalOMultiHelloRequires2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloRequires(ctx, sel, v[i])
+			ret[i] = ec.marshalOMultiHelloRequires2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloRequires(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -8087,14 +8712,22 @@ func (ec *executionContext) marshalOMultiHelloRequires2ᚕᚖgithubᚗcomᚋ99de
 	return ret
 }
 
-func (ec *executionContext) marshalOMultiHelloRequires2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloRequires(ctx context.Context, sel ast.SelectionSet, v *MultiHelloRequires) graphql.Marshaler {
+func (ec *executionContext) marshalOMultiHelloRequires2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloRequires(ctx context.Context, sel ast.SelectionSet, v *model.MultiHelloRequires) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._MultiHelloRequires(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalOMultiHelloWithError2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloWithError(ctx context.Context, sel ast.SelectionSet, v []*MultiHelloWithError) graphql.Marshaler {
+func (ec *executionContext) unmarshalOMultiHelloRequiresByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloRequiresByNamesInput(ctx context.Context, v any) (*model.MultiHelloRequiresByNamesInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputMultiHelloRequiresByNamesInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOMultiHelloWithError2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloWithError(ctx context.Context, sel ast.SelectionSet, v []*model.MultiHelloWithError) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
@@ -8121,7 +8754,7 @@ func (ec *executionContext) marshalOMultiHelloWithError2ᚕᚖgithubᚗcomᚋ99d
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalOMultiHelloWithError2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloWithError(ctx, sel, v[i])
+			ret[i] = ec.marshalOMultiHelloWithError2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloWithError(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -8135,14 +8768,22 @@ func (ec *executionContext) marshalOMultiHelloWithError2ᚕᚖgithubᚗcomᚋ99d
 	return ret
 }
 
-func (ec *executionContext) marshalOMultiHelloWithError2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiHelloWithError(ctx context.Context, sel ast.SelectionSet, v *MultiHelloWithError) graphql.Marshaler {
+func (ec *executionContext) marshalOMultiHelloWithError2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloWithError(ctx context.Context, sel ast.SelectionSet, v *model.MultiHelloWithError) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._MultiHelloWithError(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalOMultiPlanetRequiresNested2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiPlanetRequiresNested(ctx context.Context, sel ast.SelectionSet, v []*MultiPlanetRequiresNested) graphql.Marshaler {
+func (ec *executionContext) unmarshalOMultiHelloWithErrorByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiHelloWithErrorByNamesInput(ctx context.Context, v any) (*model.MultiHelloWithErrorByNamesInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputMultiHelloWithErrorByNamesInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOMultiPlanetRequiresNested2ᚕᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiPlanetRequiresNested(ctx context.Context, sel ast.SelectionSet, v []*model.MultiPlanetRequiresNested) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
@@ -8169,7 +8810,7 @@ func (ec *executionContext) marshalOMultiPlanetRequiresNested2ᚕᚖgithubᚗcom
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalOMultiPlanetRequiresNested2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiPlanetRequiresNested(ctx, sel, v[i])
+			ret[i] = ec.marshalOMultiPlanetRequiresNested2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiPlanetRequiresNested(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -8183,14 +8824,22 @@ func (ec *executionContext) marshalOMultiPlanetRequiresNested2ᚕᚖgithubᚗcom
 	return ret
 }
 
-func (ec *executionContext) marshalOMultiPlanetRequiresNested2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚐMultiPlanetRequiresNested(ctx context.Context, sel ast.SelectionSet, v *MultiPlanetRequiresNested) graphql.Marshaler {
+func (ec *executionContext) marshalOMultiPlanetRequiresNested2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiPlanetRequiresNested(ctx context.Context, sel ast.SelectionSet, v *model.MultiPlanetRequiresNested) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._MultiPlanetRequiresNested(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalOString2string(ctx context.Context, v interface{}) (string, error) {
+func (ec *executionContext) unmarshalOMultiPlanetRequiresNestedByNamesInput2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋpluginᚋfederationᚋtestdataᚋentityresolverᚋgeneratedᚋmodelᚐMultiPlanetRequiresNestedByNamesInput(ctx context.Context, v any) (*model.MultiPlanetRequiresNestedByNamesInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputMultiPlanetRequiresNestedByNamesInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalOString2string(ctx context.Context, v any) (string, error) {
 	res, err := graphql.UnmarshalString(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
@@ -8200,7 +8849,7 @@ func (ec *executionContext) marshalOString2string(ctx context.Context, sel ast.S
 	return res
 }
 
-func (ec *executionContext) unmarshalOString2ᚖstring(ctx context.Context, v interface{}) (*string, error) {
+func (ec *executionContext) unmarshalOString2ᚖstring(ctx context.Context, v any) (*string, error) {
 	if v == nil {
 		return nil, nil
 	}

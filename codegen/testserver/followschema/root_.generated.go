@@ -8,6 +8,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/introspection"
@@ -18,6 +19,7 @@ import (
 // NewExecutableSchema creates an ExecutableSchema from the ResolverRoot interface.
 func NewExecutableSchema(cfg Config) graphql.ExecutableSchema {
 	return &executableSchema{
+		schema:     cfg.Schema,
 		resolvers:  cfg.Resolvers,
 		directives: cfg.Directives,
 		complexity: cfg.Complexity,
@@ -25,6 +27,7 @@ func NewExecutableSchema(cfg Config) graphql.ExecutableSchema {
 }
 
 type Config struct {
+	Schema     *ast.Schema
 	Resolvers  ResolverRoot
 	Directives DirectiveRoot
 	Complexity ComplexityRoot
@@ -32,6 +35,7 @@ type Config struct {
 
 type ResolverRoot interface {
 	BackedByInterface() BackedByInterfaceResolver
+	DeferModel() DeferModelResolver
 	Errors() ErrorsResolver
 	ForcedResolver() ForcedResolverResolver
 	ModelMethods() ModelMethodsResolver
@@ -50,19 +54,22 @@ type ResolverRoot interface {
 }
 
 type DirectiveRoot struct {
-	Custom        func(ctx context.Context, obj interface{}, next graphql.Resolver) (res interface{}, err error)
-	Directive1    func(ctx context.Context, obj interface{}, next graphql.Resolver) (res interface{}, err error)
-	Directive2    func(ctx context.Context, obj interface{}, next graphql.Resolver) (res interface{}, err error)
-	Directive3    func(ctx context.Context, obj interface{}, next graphql.Resolver) (res interface{}, err error)
-	Length        func(ctx context.Context, obj interface{}, next graphql.Resolver, min int, max *int, message *string) (res interface{}, err error)
-	Logged        func(ctx context.Context, obj interface{}, next graphql.Resolver, id string) (res interface{}, err error)
-	MakeNil       func(ctx context.Context, obj interface{}, next graphql.Resolver) (res interface{}, err error)
-	MakeTypedNil  func(ctx context.Context, obj interface{}, next graphql.Resolver) (res interface{}, err error)
-	Order1        func(ctx context.Context, obj interface{}, next graphql.Resolver, location string) (res interface{}, err error)
-	Order2        func(ctx context.Context, obj interface{}, next graphql.Resolver, location string) (res interface{}, err error)
-	Range         func(ctx context.Context, obj interface{}, next graphql.Resolver, min *int, max *int) (res interface{}, err error)
-	ToNull        func(ctx context.Context, obj interface{}, next graphql.Resolver) (res interface{}, err error)
-	Unimplemented func(ctx context.Context, obj interface{}, next graphql.Resolver) (res interface{}, err error)
+	Custom        func(ctx context.Context, obj any, next graphql.Resolver) (res any, err error)
+	Defer         func(ctx context.Context, obj any, next graphql.Resolver, ifArg *bool, label *string) (res any, err error)
+	Directive1    func(ctx context.Context, obj any, next graphql.Resolver) (res any, err error)
+	Directive2    func(ctx context.Context, obj any, next graphql.Resolver) (res any, err error)
+	Directive3    func(ctx context.Context, obj any, next graphql.Resolver) (res any, err error)
+	Length        func(ctx context.Context, obj any, next graphql.Resolver, min int, max *int, message *string) (res any, err error)
+	Logged        func(ctx context.Context, obj any, next graphql.Resolver, id string) (res any, err error)
+	MakeNil       func(ctx context.Context, obj any, next graphql.Resolver) (res any, err error)
+	MakeTypedNil  func(ctx context.Context, obj any, next graphql.Resolver) (res any, err error)
+	Noop          func(ctx context.Context, obj any, next graphql.Resolver) (res any, err error)
+	Order1        func(ctx context.Context, obj any, next graphql.Resolver, location string) (res any, err error)
+	Order2        func(ctx context.Context, obj any, next graphql.Resolver, location string) (res any, err error)
+	Populate      func(ctx context.Context, obj any, next graphql.Resolver, value string) (res any, err error)
+	Range         func(ctx context.Context, obj any, next graphql.Resolver, min *int, max *int) (res any, err error)
+	ToNull        func(ctx context.Context, obj any, next graphql.Resolver) (res any, err error)
+	Unimplemented func(ctx context.Context, obj any, next graphql.Resolver) (res any, err error)
 }
 
 type ComplexityRoot struct {
@@ -141,6 +148,12 @@ type ComplexityRoot struct {
 		TruthyBoolean func(childComplexity int) int
 	}
 
+	DeferModel struct {
+		ID     func(childComplexity int) int
+		Name   func(childComplexity int) int
+		Values func(childComplexity int) int
+	}
+
 	Dog struct {
 		DogBreed func(childComplexity int) int
 		Size     func(childComplexity int) int
@@ -191,6 +204,12 @@ type ComplexityRoot struct {
 		Field func(childComplexity int) int
 	}
 
+	Horse struct {
+		HorseBreed func(childComplexity int) int
+		Size       func(childComplexity int) int
+		Species    func(childComplexity int) int
+	}
+
 	InnerObject struct {
 		ID func(childComplexity int) int
 	}
@@ -215,9 +234,15 @@ type ComplexityRoot struct {
 		ID func(childComplexity int) int
 	}
 
+	MapNested struct {
+		Value func(childComplexity int) int
+	}
+
 	MapStringInterfaceType struct {
-		A func(childComplexity int) int
-		B func(childComplexity int) int
+		A      func(childComplexity int) int
+		B      func(childComplexity int) int
+		C      func(childComplexity int) int
+		Nested func(childComplexity int) int
 	}
 
 	ModelMethods struct {
@@ -275,6 +300,11 @@ type ComplexityRoot struct {
 		Value   func(childComplexity int) int
 	}
 
+	PtrToAnyContainer struct {
+		Binding  func(childComplexity int) int
+		PtrToAny func(childComplexity int) int
+	}
+
 	PtrToPtrInner struct {
 		Key   func(childComplexity int) int
 		Value func(childComplexity int) int
@@ -296,6 +326,8 @@ type ComplexityRoot struct {
 		Collision                        func(childComplexity int) int
 		DefaultParameters                func(childComplexity int, falsyBoolean *bool, truthyBoolean *bool) int
 		DefaultScalar                    func(childComplexity int, arg string) int
+		DeferMultiple                    func(childComplexity int) int
+		DeferSingle                      func(childComplexity int) int
 		DeprecatedField                  func(childComplexity int) int
 		DirectiveArg                     func(childComplexity int, arg string) int
 		DirectiveDouble                  func(childComplexity int) int
@@ -307,6 +339,7 @@ type ComplexityRoot struct {
 		DirectiveNullableArg             func(childComplexity int, arg *int, arg2 *int, arg3 *string) int
 		DirectiveObject                  func(childComplexity int) int
 		DirectiveObjectWithCustomGoModel func(childComplexity int) int
+		DirectiveSingleNullableArg       func(childComplexity int, arg1 *string) int
 		DirectiveUnimplemented           func(childComplexity int) int
 		Dog                              func(childComplexity int) int
 		EmbeddedCase1                    func(childComplexity int) int
@@ -320,7 +353,9 @@ type ComplexityRoot struct {
 		Fallback                         func(childComplexity int, arg FallbackToStringEncoding) int
 		Infinity                         func(childComplexity int) int
 		InputNullableSlice               func(childComplexity int, arg []string) int
+		InputOmittable                   func(childComplexity int, arg OmittableInput) int
 		InputSlice                       func(childComplexity int, arg []string) int
+		Invalid                          func(childComplexity int) int
 		InvalidIdentifier                func(childComplexity int) int
 		Issue896a                        func(childComplexity int) int
 		MapInput                         func(childComplexity int, input map[string]interface{}) int
@@ -339,6 +374,7 @@ type ComplexityRoot struct {
 		Panics                           func(childComplexity int) int
 		PrimitiveObject                  func(childComplexity int) int
 		PrimitiveStringObject            func(childComplexity int) int
+		PtrToAnyContainer                func(childComplexity int) int
 		PtrToSliceContainer              func(childComplexity int) int
 		Recursive                        func(childComplexity int, input *RecursiveInputSlice) int
 		ScalarSlice                      func(childComplexity int) int
@@ -447,17 +483,21 @@ type ComplexityRoot struct {
 }
 
 type executableSchema struct {
+	schema     *ast.Schema
 	resolvers  ResolverRoot
 	directives DirectiveRoot
 	complexity ComplexityRoot
 }
 
 func (e *executableSchema) Schema() *ast.Schema {
+	if e.schema != nil {
+		return e.schema
+	}
 	return parsedSchema
 }
 
-func (e *executableSchema) Complexity(typeName, field string, childComplexity int, rawArgs map[string]interface{}) (int, bool) {
-	ec := executionContext{nil, e}
+func (e *executableSchema) Complexity(typeName, field string, childComplexity int, rawArgs map[string]any) (int, bool) {
+	ec := executionContext{nil, e, 0, 0, nil}
 	_ = ec
 	switch typeName + "." + field {
 
@@ -671,6 +711,27 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.DefaultParametersMirror.TruthyBoolean(childComplexity), true
 
+	case "DeferModel.id":
+		if e.complexity.DeferModel.ID == nil {
+			break
+		}
+
+		return e.complexity.DeferModel.ID(childComplexity), true
+
+	case "DeferModel.name":
+		if e.complexity.DeferModel.Name == nil {
+			break
+		}
+
+		return e.complexity.DeferModel.Name(childComplexity), true
+
+	case "DeferModel.values":
+		if e.complexity.DeferModel.Values == nil {
+			break
+		}
+
+		return e.complexity.DeferModel.Values(childComplexity), true
+
 	case "Dog.dogBreed":
 		if e.complexity.Dog.DogBreed == nil {
 			break
@@ -811,6 +872,27 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.ForcedResolver.Field(childComplexity), true
 
+	case "Horse.horseBreed":
+		if e.complexity.Horse.HorseBreed == nil {
+			break
+		}
+
+		return e.complexity.Horse.HorseBreed(childComplexity), true
+
+	case "Horse.size":
+		if e.complexity.Horse.Size == nil {
+			break
+		}
+
+		return e.complexity.Horse.Size(childComplexity), true
+
+	case "Horse.species":
+		if e.complexity.Horse.Species == nil {
+			break
+		}
+
+		return e.complexity.Horse.Species(childComplexity), true
+
 	case "InnerObject.id":
 		if e.complexity.InnerObject.ID == nil {
 			break
@@ -853,6 +935,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Map.ID(childComplexity), true
 
+	case "MapNested.value":
+		if e.complexity.MapNested.Value == nil {
+			break
+		}
+
+		return e.complexity.MapNested.Value(childComplexity), true
+
 	case "MapStringInterfaceType.a":
 		if e.complexity.MapStringInterfaceType.A == nil {
 			break
@@ -866,6 +955,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.MapStringInterfaceType.B(childComplexity), true
+
+	case "MapStringInterfaceType.c":
+		if e.complexity.MapStringInterfaceType.C == nil {
+			break
+		}
+
+		return e.complexity.MapStringInterfaceType.C(childComplexity), true
+
+	case "MapStringInterfaceType.nested":
+		if e.complexity.MapStringInterfaceType.Nested == nil {
+			break
+		}
+
+		return e.complexity.MapStringInterfaceType.Nested(childComplexity), true
 
 	case "ModelMethods.noContext":
 		if e.complexity.ModelMethods.NoContext == nil {
@@ -1077,6 +1180,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.PrimitiveString.Value(childComplexity), true
 
+	case "PtrToAnyContainer.binding":
+		if e.complexity.PtrToAnyContainer.Binding == nil {
+			break
+		}
+
+		return e.complexity.PtrToAnyContainer.Binding(childComplexity), true
+
+	case "PtrToAnyContainer.ptrToAny":
+		if e.complexity.PtrToAnyContainer.PtrToAny == nil {
+			break
+		}
+
+		return e.complexity.PtrToAnyContainer.PtrToAny(childComplexity), true
+
 	case "PtrToPtrInner.key":
 		if e.complexity.PtrToPtrInner.Key == nil {
 			break
@@ -1163,6 +1280,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.DefaultScalar(childComplexity, args["arg"].(string)), true
+
+	case "Query.deferMultiple":
+		if e.complexity.Query.DeferMultiple == nil {
+			break
+		}
+
+		return e.complexity.Query.DeferMultiple(childComplexity), true
+
+	case "Query.deferSingle":
+		if e.complexity.Query.DeferSingle == nil {
+			break
+		}
+
+		return e.complexity.Query.DeferSingle(childComplexity), true
 
 	case "Query.deprecatedField":
 		if e.complexity.Query.DeprecatedField == nil {
@@ -1271,6 +1402,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.DirectiveObjectWithCustomGoModel(childComplexity), true
 
+	case "Query.directiveSingleNullableArg":
+		if e.complexity.Query.DirectiveSingleNullableArg == nil {
+			break
+		}
+
+		args, err := ec.field_Query_directiveSingleNullableArg_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.DirectiveSingleNullableArg(childComplexity, args["arg1"].(*string)), true
+
 	case "Query.directiveUnimplemented":
 		if e.complexity.Query.DirectiveUnimplemented == nil {
 			break
@@ -1377,6 +1520,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.InputNullableSlice(childComplexity, args["arg"].([]string)), true
 
+	case "Query.inputOmittable":
+		if e.complexity.Query.InputOmittable == nil {
+			break
+		}
+
+		args, err := ec.field_Query_inputOmittable_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.InputOmittable(childComplexity, args["arg"].(OmittableInput)), true
+
 	case "Query.inputSlice":
 		if e.complexity.Query.InputSlice == nil {
 			break
@@ -1388,6 +1543,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.InputSlice(childComplexity, args["arg"].([]string)), true
+
+	case "Query.invalid":
+		if e.complexity.Query.Invalid == nil {
+			break
+		}
+
+		return e.complexity.Query.Invalid(childComplexity), true
 
 	case "Query.invalidIdentifier":
 		if e.complexity.Query.InvalidIdentifier == nil {
@@ -1539,6 +1701,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.PrimitiveStringObject(childComplexity), true
+
+	case "Query.ptrToAnyContainer":
+		if e.complexity.Query.PtrToAnyContainer == nil {
+			break
+		}
+
+		return e.complexity.Query.PtrToAnyContainer(childComplexity), true
 
 	case "Query.ptrToSliceContainer":
 		if e.complexity.Query.PtrToSliceContainer == nil {
@@ -1987,17 +2156,21 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 }
 
 func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
-	rc := graphql.GetOperationContext(ctx)
-	ec := executionContext{rc, e}
+	opCtx := graphql.GetOperationContext(ctx)
+	ec := executionContext{opCtx, e, 0, 0, make(chan graphql.DeferredResult)}
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
+		ec.unmarshalInputChanges,
 		ec.unmarshalInputDefaultInput,
 		ec.unmarshalInputFieldsOrderInput,
 		ec.unmarshalInputInnerDirectives,
 		ec.unmarshalInputInnerInput,
 		ec.unmarshalInputInputDirectives,
 		ec.unmarshalInputInputWithEnumValue,
+		ec.unmarshalInputMapNestedInput,
+		ec.unmarshalInputMapStringInterfaceInput,
 		ec.unmarshalInputNestedInput,
 		ec.unmarshalInputNestedMapInput,
+		ec.unmarshalInputOmittableInput,
 		ec.unmarshalInputOuterInput,
 		ec.unmarshalInputRecursiveInputSlice,
 		ec.unmarshalInputSpecialInput,
@@ -2007,21 +2180,36 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	)
 	first := true
 
-	switch rc.Operation.Operation {
+	switch opCtx.Operation.Operation {
 	case ast.Query:
 		return func(ctx context.Context) *graphql.Response {
-			if !first {
-				return nil
+			var response graphql.Response
+			var data graphql.Marshaler
+			if first {
+				first = false
+				ctx = graphql.WithUnmarshalerMap(ctx, inputUnmarshalMap)
+				data = ec._Query(ctx, opCtx.Operation.SelectionSet)
+			} else {
+				if atomic.LoadInt32(&ec.pendingDeferred) > 0 {
+					result := <-ec.deferredResults
+					atomic.AddInt32(&ec.pendingDeferred, -1)
+					data = result.Result
+					response.Path = result.Path
+					response.Label = result.Label
+					response.Errors = result.Errors
+				} else {
+					return nil
+				}
 			}
-			first = false
-			ctx = graphql.WithUnmarshalerMap(ctx, inputUnmarshalMap)
-			data := ec._Query(ctx, rc.Operation.SelectionSet)
 			var buf bytes.Buffer
 			data.MarshalGQL(&buf)
-
-			return &graphql.Response{
-				Data: buf.Bytes(),
+			response.Data = buf.Bytes()
+			if atomic.LoadInt32(&ec.deferred) > 0 {
+				hasNext := atomic.LoadInt32(&ec.pendingDeferred) > 0
+				response.HasNext = &hasNext
 			}
+
+			return &response
 		}
 	case ast.Mutation:
 		return func(ctx context.Context) *graphql.Response {
@@ -2030,7 +2218,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			}
 			first = false
 			ctx = graphql.WithUnmarshalerMap(ctx, inputUnmarshalMap)
-			data := ec._Mutation(ctx, rc.Operation.SelectionSet)
+			data := ec._Mutation(ctx, opCtx.Operation.SelectionSet)
 			var buf bytes.Buffer
 			data.MarshalGQL(&buf)
 
@@ -2039,7 +2227,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			}
 		}
 	case ast.Subscription:
-		next := ec._Subscription(ctx, rc.Operation.SelectionSet)
+		next := ec._Subscription(ctx, opCtx.Operation.SelectionSet)
 
 		var buf bytes.Buffer
 		return func(ctx context.Context) *graphql.Response {
@@ -2064,23 +2252,45 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 type executionContext struct {
 	*graphql.OperationContext
 	*executableSchema
+	deferred        int32
+	pendingDeferred int32
+	deferredResults chan graphql.DeferredResult
+}
+
+func (ec *executionContext) processDeferredGroup(dg graphql.DeferredGroup) {
+	atomic.AddInt32(&ec.pendingDeferred, 1)
+	go func() {
+		ctx := graphql.WithFreshResponseContext(dg.Context)
+		dg.FieldSet.Dispatch(ctx)
+		ds := graphql.DeferredResult{
+			Path:   dg.Path,
+			Label:  dg.Label,
+			Result: dg.FieldSet,
+			Errors: graphql.GetErrors(ctx),
+		}
+		// null fields should bubble up
+		if dg.FieldSet.Invalids > 0 {
+			ds.Result = graphql.Null
+		}
+		ec.deferredResults <- ds
+	}()
 }
 
 func (ec *executionContext) introspectSchema() (*introspection.Schema, error) {
 	if ec.DisableIntrospection {
 		return nil, errors.New("introspection disabled")
 	}
-	return introspection.WrapSchema(parsedSchema), nil
+	return introspection.WrapSchema(ec.Schema()), nil
 }
 
 func (ec *executionContext) introspectType(name string) (*introspection.Type, error) {
 	if ec.DisableIntrospection {
 		return nil, errors.New("introspection disabled")
 	}
-	return introspection.WrapTypeFromDef(parsedSchema, parsedSchema.Types[name]), nil
+	return introspection.WrapTypeFromDef(ec.Schema(), ec.Schema().Types[name]), nil
 }
 
-//go:embed "builtinscalar.graphql" "complexity.graphql" "defaults.graphql" "directive.graphql" "embedded.graphql" "enum.graphql" "fields_order.graphql" "interfaces.graphql" "issue896.graphql" "loops.graphql" "maps.graphql" "mutation_with_custom_scalar.graphql" "nulls.graphql" "panics.graphql" "primitive_objects.graphql" "ptr_to_ptr_input.graphql" "ptr_to_slice.graphql" "scalar_context.graphql" "scalar_default.graphql" "schema.graphql" "slices.graphql" "typefallback.graphql" "useptr.graphql" "v-ok.graphql" "validtypes.graphql" "variadic.graphql" "weird_type_cases.graphql" "wrapped_type.graphql"
+//go:embed "builtinscalar.graphql" "complexity.graphql" "defaults.graphql" "defer.graphql" "directive.graphql" "embedded.graphql" "enum.graphql" "fields_order.graphql" "interfaces.graphql" "issue896.graphql" "loops.graphql" "maps.graphql" "mutation_with_custom_scalar.graphql" "nulls.graphql" "panics.graphql" "primitive_objects.graphql" "ptr_to_any.graphql" "ptr_to_ptr_input.graphql" "ptr_to_slice.graphql" "scalar_context.graphql" "scalar_default.graphql" "schema.graphql" "slices.graphql" "typefallback.graphql" "useptr.graphql" "v-ok.graphql" "validtypes.graphql" "variadic.graphql" "weird_type_cases.graphql" "wrapped_type.graphql"
 var sourcesFS embed.FS
 
 func sourceData(filename string) string {
@@ -2095,6 +2305,7 @@ var sources = []*ast.Source{
 	{Name: "builtinscalar.graphql", Input: sourceData("builtinscalar.graphql"), BuiltIn: false},
 	{Name: "complexity.graphql", Input: sourceData("complexity.graphql"), BuiltIn: false},
 	{Name: "defaults.graphql", Input: sourceData("defaults.graphql"), BuiltIn: false},
+	{Name: "defer.graphql", Input: sourceData("defer.graphql"), BuiltIn: false},
 	{Name: "directive.graphql", Input: sourceData("directive.graphql"), BuiltIn: false},
 	{Name: "embedded.graphql", Input: sourceData("embedded.graphql"), BuiltIn: false},
 	{Name: "enum.graphql", Input: sourceData("enum.graphql"), BuiltIn: false},
@@ -2107,6 +2318,7 @@ var sources = []*ast.Source{
 	{Name: "nulls.graphql", Input: sourceData("nulls.graphql"), BuiltIn: false},
 	{Name: "panics.graphql", Input: sourceData("panics.graphql"), BuiltIn: false},
 	{Name: "primitive_objects.graphql", Input: sourceData("primitive_objects.graphql"), BuiltIn: false},
+	{Name: "ptr_to_any.graphql", Input: sourceData("ptr_to_any.graphql"), BuiltIn: false},
 	{Name: "ptr_to_ptr_input.graphql", Input: sourceData("ptr_to_ptr_input.graphql"), BuiltIn: false},
 	{Name: "ptr_to_slice.graphql", Input: sourceData("ptr_to_slice.graphql"), BuiltIn: false},
 	{Name: "scalar_context.graphql", Input: sourceData("scalar_context.graphql"), BuiltIn: false},

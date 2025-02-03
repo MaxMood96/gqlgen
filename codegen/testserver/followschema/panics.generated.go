@@ -24,34 +24,60 @@ type PanicsResolver interface {
 
 // region    ***************************** args.gotpl *****************************
 
-func (ec *executionContext) field_Panics_argUnmarshal_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+func (ec *executionContext) field_Panics_argUnmarshal_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 []MarshalPanic
-	if tmp, ok := rawArgs["u"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("u"))
-		arg0, err = ec.unmarshalNMarshalPanic2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋcodegenᚋtestserverᚋfollowschemaᚐMarshalPanicᚄ(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field_Panics_argUnmarshal_argsU(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["u"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Panics_argUnmarshal_argsU(
+	ctx context.Context,
+	rawArgs map[string]any,
+) ([]MarshalPanic, error) {
+	if _, ok := rawArgs["u"]; !ok {
+		var zeroVal []MarshalPanic
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Panics_fieldFuncMarshal_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 []MarshalPanic
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("u"))
 	if tmp, ok := rawArgs["u"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("u"))
-		arg0, err = ec.unmarshalNMarshalPanic2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋcodegenᚋtestserverᚋfollowschemaᚐMarshalPanicᚄ(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+		return ec.unmarshalNMarshalPanic2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋcodegenᚋtestserverᚋfollowschemaᚐMarshalPanicᚄ(ctx, tmp)
+	}
+
+	var zeroVal []MarshalPanic
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Panics_fieldFuncMarshal_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Panics_fieldFuncMarshal_argsU(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["u"] = arg0
 	return args, nil
+}
+func (ec *executionContext) field_Panics_fieldFuncMarshal_argsU(
+	ctx context.Context,
+	rawArgs map[string]any,
+) ([]MarshalPanic, error) {
+	if _, ok := rawArgs["u"]; !ok {
+		var zeroVal []MarshalPanic
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("u"))
+	if tmp, ok := rawArgs["u"]; ok {
+		return ec.unmarshalNMarshalPanic2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋcodegenᚋtestserverᚋfollowschemaᚐMarshalPanicᚄ(ctx, tmp)
+	}
+
+	var zeroVal []MarshalPanic
+	return zeroVal, nil
 }
 
 // endregion ***************************** args.gotpl *****************************
@@ -74,7 +100,7 @@ func (ec *executionContext) _Panics_fieldScalarMarshal(ctx context.Context, fiel
 			ret = graphql.Null
 		}
 	}()
-	resTmp := ec._fieldMiddleware(ctx, obj, func(rctx context.Context) (interface{}, error) {
+	resTmp := ec._fieldMiddleware(ctx, obj, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Panics().FieldScalarMarshal(rctx, obj)
 	})
@@ -90,7 +116,7 @@ func (ec *executionContext) _Panics_fieldScalarMarshal(ctx context.Context, fiel
 	return ec.marshalNMarshalPanic2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋcodegenᚋtestserverᚋfollowschemaᚐMarshalPanicᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Panics_fieldScalarMarshal(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Panics_fieldScalarMarshal(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Panics",
 		Field:      field,
@@ -115,7 +141,7 @@ func (ec *executionContext) _Panics_fieldFuncMarshal(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp := ec._fieldMiddleware(ctx, obj, func(rctx context.Context) (interface{}, error) {
+	resTmp := ec._fieldMiddleware(ctx, obj, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.FieldFuncMarshal(ctx, fc.Args["u"].([]MarshalPanic)), nil
 	})
@@ -150,7 +176,7 @@ func (ec *executionContext) fieldContext_Panics_fieldFuncMarshal(ctx context.Con
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Panics_fieldFuncMarshal_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -167,7 +193,7 @@ func (ec *executionContext) _Panics_argUnmarshal(ctx context.Context, field grap
 			ret = graphql.Null
 		}
 	}()
-	resTmp := ec._fieldMiddleware(ctx, obj, func(rctx context.Context) (interface{}, error) {
+	resTmp := ec._fieldMiddleware(ctx, obj, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Panics().ArgUnmarshal(rctx, obj, fc.Args["u"].([]MarshalPanic))
 	})
@@ -202,7 +228,7 @@ func (ec *executionContext) fieldContext_Panics_argUnmarshal(ctx context.Context
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Panics_argUnmarshal_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -223,8 +249,9 @@ var panicsImplementors = []string{"Panics"}
 
 func (ec *executionContext) _Panics(ctx context.Context, sel ast.SelectionSet, obj *Panics) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, panicsImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
@@ -232,7 +259,7 @@ func (ec *executionContext) _Panics(ctx context.Context, sel ast.SelectionSet, o
 		case "fieldScalarMarshal":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -240,19 +267,35 @@ func (ec *executionContext) _Panics(ctx context.Context, sel ast.SelectionSet, o
 				}()
 				res = ec._Panics_fieldScalarMarshal(ctx, field, obj)
 				if res == graphql.Null {
-					atomic.AddUint32(&invalids, 1)
+					atomic.AddUint32(&fs.Invalids, 1)
 				}
 				return res
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return innerFunc(ctx)
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
 
-			})
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "fieldFuncMarshal":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -260,19 +303,35 @@ func (ec *executionContext) _Panics(ctx context.Context, sel ast.SelectionSet, o
 				}()
 				res = ec._Panics_fieldFuncMarshal(ctx, field, obj)
 				if res == graphql.Null {
-					atomic.AddUint32(&invalids, 1)
+					atomic.AddUint32(&fs.Invalids, 1)
 				}
 				return res
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return innerFunc(ctx)
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
 
-			})
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "argUnmarshal":
 			field := field
 
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
 				defer func() {
 					if r := recover(); r != nil {
 						ec.Error(ctx, ec.Recover(ctx, r))
@@ -280,23 +339,51 @@ func (ec *executionContext) _Panics(ctx context.Context, sel ast.SelectionSet, o
 				}()
 				res = ec._Panics_argUnmarshal(ctx, field, obj)
 				if res == graphql.Null {
-					atomic.AddUint32(&invalids, 1)
+					atomic.AddUint32(&fs.Invalids, 1)
 				}
 				return res
 			}
 
-			out.Concurrently(i, func() graphql.Marshaler {
-				return innerFunc(ctx)
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
 
-			})
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
@@ -304,7 +391,7 @@ func (ec *executionContext) _Panics(ctx context.Context, sel ast.SelectionSet, o
 
 // region    ***************************** type.gotpl *****************************
 
-func (ec *executionContext) unmarshalNMarshalPanic2githubᚗcomᚋ99designsᚋgqlgenᚋcodegenᚋtestserverᚋfollowschemaᚐMarshalPanic(ctx context.Context, v interface{}) (MarshalPanic, error) {
+func (ec *executionContext) unmarshalNMarshalPanic2githubᚗcomᚋ99designsᚋgqlgenᚋcodegenᚋtestserverᚋfollowschemaᚐMarshalPanic(ctx context.Context, v any) (MarshalPanic, error) {
 	var res MarshalPanic
 	err := res.UnmarshalGQL(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -314,8 +401,8 @@ func (ec *executionContext) marshalNMarshalPanic2githubᚗcomᚋ99designsᚋgqlg
 	return v
 }
 
-func (ec *executionContext) unmarshalNMarshalPanic2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋcodegenᚋtestserverᚋfollowschemaᚐMarshalPanicᚄ(ctx context.Context, v interface{}) ([]MarshalPanic, error) {
-	var vSlice []interface{}
+func (ec *executionContext) unmarshalNMarshalPanic2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋcodegenᚋtestserverᚋfollowschemaᚐMarshalPanicᚄ(ctx context.Context, v any) ([]MarshalPanic, error) {
+	var vSlice []any
 	if v != nil {
 		vSlice = graphql.CoerceList(v)
 	}

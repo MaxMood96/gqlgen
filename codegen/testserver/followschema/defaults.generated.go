@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync/atomic"
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/vektah/gqlparser/v2/ast"
@@ -25,64 +26,116 @@ type MutationResolver interface {
 
 // region    ***************************** args.gotpl *****************************
 
-func (ec *executionContext) field_Mutation_defaultInput_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+func (ec *executionContext) field_Mutation_defaultInput_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
-	args := map[string]interface{}{}
-	var arg0 DefaultInput
-	if tmp, ok := rawArgs["input"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
-		arg0, err = ec.unmarshalNDefaultInput2githubᚗcomᚋ99designsᚋgqlgenᚋcodegenᚋtestserverᚋfollowschemaᚐDefaultInput(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_defaultInput_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["input"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Mutation_defaultInput_argsInput(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (DefaultInput, error) {
+	if _, ok := rawArgs["input"]; !ok {
+		var zeroVal DefaultInput
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Mutation_overrideValueViaInput_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 FieldsOrderInput
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
 	if tmp, ok := rawArgs["input"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
-		arg0, err = ec.unmarshalNFieldsOrderInput2githubᚗcomᚋ99designsᚋgqlgenᚋcodegenᚋtestserverᚋfollowschemaᚐFieldsOrderInput(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+		return ec.unmarshalNDefaultInput2githubᚗcomᚋ99designsᚋgqlgenᚋcodegenᚋtestserverᚋfollowschemaᚐDefaultInput(ctx, tmp)
+	}
+
+	var zeroVal DefaultInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_overrideValueViaInput_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_overrideValueViaInput_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["input"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Mutation_overrideValueViaInput_argsInput(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (FieldsOrderInput, error) {
+	if _, ok := rawArgs["input"]; !ok {
+		var zeroVal FieldsOrderInput
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Mutation_updatePtrToPtr_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 UpdatePtrToPtrOuter
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
 	if tmp, ok := rawArgs["input"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
-		arg0, err = ec.unmarshalNUpdatePtrToPtrOuter2githubᚗcomᚋ99designsᚋgqlgenᚋcodegenᚋtestserverᚋfollowschemaᚐUpdatePtrToPtrOuter(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+		return ec.unmarshalNFieldsOrderInput2githubᚗcomᚋ99designsᚋgqlgenᚋcodegenᚋtestserverᚋfollowschemaᚐFieldsOrderInput(ctx, tmp)
+	}
+
+	var zeroVal FieldsOrderInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_updatePtrToPtr_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_updatePtrToPtr_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["input"] = arg0
 	return args, nil
 }
+func (ec *executionContext) field_Mutation_updatePtrToPtr_argsInput(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (UpdatePtrToPtrOuter, error) {
+	if _, ok := rawArgs["input"]; !ok {
+		var zeroVal UpdatePtrToPtrOuter
+		return zeroVal, nil
+	}
 
-func (ec *executionContext) field_Mutation_updateSomething_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 SpecialInput
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
 	if tmp, ok := rawArgs["input"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
-		arg0, err = ec.unmarshalNSpecialInput2githubᚗcomᚋ99designsᚋgqlgenᚋcodegenᚋtestserverᚋfollowschemaᚐSpecialInput(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
+		return ec.unmarshalNUpdatePtrToPtrOuter2githubᚗcomᚋ99designsᚋgqlgenᚋcodegenᚋtestserverᚋfollowschemaᚐUpdatePtrToPtrOuter(ctx, tmp)
+	}
+
+	var zeroVal UpdatePtrToPtrOuter
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_updateSomething_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_updateSomething_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
 	}
 	args["input"] = arg0
 	return args, nil
+}
+func (ec *executionContext) field_Mutation_updateSomething_argsInput(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (SpecialInput, error) {
+	if _, ok := rawArgs["input"]; !ok {
+		var zeroVal SpecialInput
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
+	if tmp, ok := rawArgs["input"]; ok {
+		return ec.unmarshalNSpecialInput2githubᚗcomᚋ99designsᚋgqlgenᚋcodegenᚋtestserverᚋfollowschemaᚐSpecialInput(ctx, tmp)
+	}
+
+	var zeroVal SpecialInput
+	return zeroVal, nil
 }
 
 // endregion ***************************** args.gotpl *****************************
@@ -105,7 +158,7 @@ func (ec *executionContext) _DefaultParametersMirror_falsyBoolean(ctx context.Co
 			ret = graphql.Null
 		}
 	}()
-	resTmp := ec._fieldMiddleware(ctx, obj, func(rctx context.Context) (interface{}, error) {
+	resTmp := ec._fieldMiddleware(ctx, obj, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.FalsyBoolean, nil
 	})
@@ -118,7 +171,7 @@ func (ec *executionContext) _DefaultParametersMirror_falsyBoolean(ctx context.Co
 	return ec.marshalOBoolean2ᚖbool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_DefaultParametersMirror_falsyBoolean(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_DefaultParametersMirror_falsyBoolean(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "DefaultParametersMirror",
 		Field:      field,
@@ -143,7 +196,7 @@ func (ec *executionContext) _DefaultParametersMirror_truthyBoolean(ctx context.C
 			ret = graphql.Null
 		}
 	}()
-	resTmp := ec._fieldMiddleware(ctx, obj, func(rctx context.Context) (interface{}, error) {
+	resTmp := ec._fieldMiddleware(ctx, obj, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.TruthyBoolean, nil
 	})
@@ -156,7 +209,7 @@ func (ec *executionContext) _DefaultParametersMirror_truthyBoolean(ctx context.C
 	return ec.marshalOBoolean2ᚖbool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_DefaultParametersMirror_truthyBoolean(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_DefaultParametersMirror_truthyBoolean(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "DefaultParametersMirror",
 		Field:      field,
@@ -181,7 +234,7 @@ func (ec *executionContext) _Mutation_defaultInput(ctx context.Context, field gr
 			ret = graphql.Null
 		}
 	}()
-	resTmp := ec._fieldMiddleware(ctx, nil, func(rctx context.Context) (interface{}, error) {
+	resTmp := ec._fieldMiddleware(ctx, nil, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Mutation().DefaultInput(rctx, fc.Args["input"].(DefaultInput))
 	})
@@ -222,7 +275,7 @@ func (ec *executionContext) fieldContext_Mutation_defaultInput(ctx context.Conte
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_defaultInput_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -239,7 +292,7 @@ func (ec *executionContext) _Mutation_overrideValueViaInput(ctx context.Context,
 			ret = graphql.Null
 		}
 	}()
-	resTmp := ec._fieldMiddleware(ctx, nil, func(rctx context.Context) (interface{}, error) {
+	resTmp := ec._fieldMiddleware(ctx, nil, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Mutation().OverrideValueViaInput(rctx, fc.Args["input"].(FieldsOrderInput))
 	})
@@ -278,7 +331,7 @@ func (ec *executionContext) fieldContext_Mutation_overrideValueViaInput(ctx cont
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_overrideValueViaInput_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -295,7 +348,7 @@ func (ec *executionContext) _Mutation_updateSomething(ctx context.Context, field
 			ret = graphql.Null
 		}
 	}()
-	resTmp := ec._fieldMiddleware(ctx, nil, func(rctx context.Context) (interface{}, error) {
+	resTmp := ec._fieldMiddleware(ctx, nil, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Mutation().UpdateSomething(rctx, fc.Args["input"].(SpecialInput))
 	})
@@ -330,7 +383,7 @@ func (ec *executionContext) fieldContext_Mutation_updateSomething(ctx context.Co
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_updateSomething_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -347,7 +400,7 @@ func (ec *executionContext) _Mutation_updatePtrToPtr(ctx context.Context, field 
 			ret = graphql.Null
 		}
 	}()
-	resTmp := ec._fieldMiddleware(ctx, nil, func(rctx context.Context) (interface{}, error) {
+	resTmp := ec._fieldMiddleware(ctx, nil, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Mutation().UpdatePtrToPtr(rctx, fc.Args["input"].(UpdatePtrToPtrOuter))
 	})
@@ -390,7 +443,7 @@ func (ec *executionContext) fieldContext_Mutation_updatePtrToPtr(ctx context.Con
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_updatePtrToPtr_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
-		return
+		return fc, err
 	}
 	return fc, nil
 }
@@ -399,10 +452,10 @@ func (ec *executionContext) fieldContext_Mutation_updatePtrToPtr(ctx context.Con
 
 // region    **************************** input.gotpl *****************************
 
-func (ec *executionContext) unmarshalInputDefaultInput(ctx context.Context, obj interface{}) (DefaultInput, error) {
+func (ec *executionContext) unmarshalInputDefaultInput(ctx context.Context, obj any) (DefaultInput, error) {
 	var it DefaultInput
-	asMap := map[string]interface{}{}
-	for k, v := range obj.(map[string]interface{}) {
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
 	}
 
@@ -421,21 +474,19 @@ func (ec *executionContext) unmarshalInputDefaultInput(ctx context.Context, obj 
 		}
 		switch k {
 		case "falsyBoolean":
-			var err error
-
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("falsyBoolean"))
-			it.FalsyBoolean, err = ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
 			if err != nil {
 				return it, err
 			}
+			it.FalsyBoolean = data
 		case "truthyBoolean":
-			var err error
-
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("truthyBoolean"))
-			it.TruthyBoolean, err = ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
 			if err != nil {
 				return it, err
 			}
+			it.TruthyBoolean = data
 		}
 	}
 
@@ -454,28 +505,37 @@ var defaultParametersMirrorImplementors = []string{"DefaultParametersMirror"}
 
 func (ec *executionContext) _DefaultParametersMirror(ctx context.Context, sel ast.SelectionSet, obj *DefaultParametersMirror) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, defaultParametersMirrorImplementors)
+
 	out := graphql.NewFieldSet(fields)
-	var invalids uint32
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("DefaultParametersMirror")
 		case "falsyBoolean":
-
 			out.Values[i] = ec._DefaultParametersMirror_falsyBoolean(ctx, field, obj)
-
 		case "truthyBoolean":
-
 			out.Values[i] = ec._DefaultParametersMirror_truthyBoolean(ctx, field, obj)
-
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
-	if invalids > 0 {
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
 		return graphql.Null
 	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
@@ -488,6 +548,7 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 	})
 
 	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		innerCtx := graphql.WithRootFieldContext(ctx, &graphql.RootFieldContext{
 			Object: field.Name,
@@ -498,34 +559,53 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Mutation")
 		case "defaultInput":
-
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_defaultInput(ctx, field)
 			})
-
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "overrideValueViaInput":
-
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_overrideValueViaInput(ctx, field)
 			})
-
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "updateSomething":
-
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_updateSomething(ctx, field)
 			})
-
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "updatePtrToPtr":
-
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_updatePtrToPtr(ctx, field)
 			})
-
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
 	}
-	out.Dispatch()
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
 	return out
 }
 
@@ -533,7 +613,7 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 
 // region    ***************************** type.gotpl *****************************
 
-func (ec *executionContext) unmarshalNDefaultInput2githubᚗcomᚋ99designsᚋgqlgenᚋcodegenᚋtestserverᚋfollowschemaᚐDefaultInput(ctx context.Context, v interface{}) (DefaultInput, error) {
+func (ec *executionContext) unmarshalNDefaultInput2githubᚗcomᚋ99designsᚋgqlgenᚋcodegenᚋtestserverᚋfollowschemaᚐDefaultInput(ctx context.Context, v any) (DefaultInput, error) {
 	res, err := ec.unmarshalInputDefaultInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }

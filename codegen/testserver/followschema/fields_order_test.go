@@ -6,6 +6,7 @@ import (
 
 	"github.com/99designs/gqlgen/client"
 	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,7 +19,9 @@ type FieldsOrderPayloadResults struct {
 func TestFieldsOrder(t *testing.T) {
 	resolvers := &Stub{}
 
-	c := client.New(handler.NewDefaultServer(NewExecutableSchema(Config{Resolvers: resolvers})))
+	srv := handler.New(NewExecutableSchema(Config{Resolvers: resolvers}))
+	srv.AddTransport(transport.POST{})
+	c := client.New(srv)
 	resolvers.FieldsOrderInputResolver.OverrideFirstField = func(ctx context.Context, in *FieldsOrderInput, data *string) error {
 		if data != nil {
 			in.FirstField = data
@@ -29,7 +32,7 @@ func TestFieldsOrder(t *testing.T) {
 		ret = &FieldsOrderPayload{
 			FirstFieldValue: in.FirstField,
 		}
-		return
+		return ret, nil
 	}
 
 	t.Run("firstField", func(t *testing.T) {

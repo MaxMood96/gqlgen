@@ -12,13 +12,12 @@ import (
 type ExecutableSchema interface {
 	Schema() *ast.Schema
 
-	Complexity(typeName, fieldName string, childComplexity int, args map[string]interface{}) (int, bool)
+	Complexity(typeName, fieldName string, childComplexity int, args map[string]any) (int, bool)
 	Exec(ctx context.Context) ResponseHandler
 }
 
 // CollectFields returns the set of fields from an ast.SelectionSet where all collected fields satisfy at least one of the GraphQL types
-// passed through satisfies. Providing an empty or nil slice for satisfies will return collect all fields regardless of fragment
-// type conditions.
+// passed through satisfies. Providing an empty slice for satisfies will collect all fields regardless of fragment type conditions.
 func CollectFields(reqCtx *OperationContext, selSet ast.SelectionSet, satisfies []string) []CollectedField {
 	return collectFields(reqCtx, selSet, satisfies, map[string]bool{})
 }
@@ -39,21 +38,37 @@ func collectFields(reqCtx *OperationContext, selSet ast.SelectionSet, satisfies 
 			f.Selections = append(f.Selections, sel.SelectionSet...)
 
 		case *ast.InlineFragment:
+			// To allow simplified "collect all" types behavior, pass an empty list
+			// of types that the type condition must satisfy: we will apply the
+			// fragment regardless of type condition.
+			//
+			// When the type condition is not set (... { field }) we will apply the
+			// fragment to any satisfying types.
+			//
+			// We will only NOT apply the fragment when we have at least one type in
+			// the list we must satisfy and a type condition to compare them to.
+			if len(satisfies) > 0 && sel.TypeCondition != "" && !instanceOf(sel.TypeCondition, satisfies) {
+				continue
+			}
+
 			if !shouldIncludeNode(sel.Directives, reqCtx.Variables) {
 				continue
 			}
-			if len(satisfies) > 0 && !instanceOf(sel.TypeCondition, satisfies) {
-				continue
-			}
+			shouldDefer, label := deferrable(sel.Directives, reqCtx.Variables)
+
 			for _, childField := range collectFields(reqCtx, sel.SelectionSet, satisfies, visited) {
-				f := getOrCreateAndAppendField(&groupedFields, childField.Name, childField.Alias, childField.ObjectDefinition, func() CollectedField { return childField })
+				f := getOrCreateAndAppendField(
+					&groupedFields, childField.Name, childField.Alias, childField.ObjectDefinition,
+					func() CollectedField { return childField })
 				f.Selections = append(f.Selections, childField.Selections...)
+				if shouldDefer {
+					f.Deferrable = &Deferrable{
+						Label: label,
+					}
+				}
 			}
 
 		case *ast.FragmentSpread:
-			if !shouldIncludeNode(sel.Directives, reqCtx.Variables) {
-				continue
-			}
 			fragmentName := sel.Name
 			if _, seen := visited[fragmentName]; seen {
 				continue
@@ -70,9 +85,19 @@ func collectFields(reqCtx *OperationContext, selSet ast.SelectionSet, satisfies 
 				continue
 			}
 
+			if !shouldIncludeNode(sel.Directives, reqCtx.Variables) {
+				continue
+			}
+			shouldDefer, label := deferrable(sel.Directives, reqCtx.Variables)
+
 			for _, childField := range collectFields(reqCtx, fragment.SelectionSet, satisfies, visited) {
-				f := getOrCreateAndAppendField(&groupedFields, childField.Name, childField.Alias, childField.ObjectDefinition, func() CollectedField { return childField })
+				f := getOrCreateAndAppendField(&groupedFields,
+					childField.Name, childField.Alias, childField.ObjectDefinition,
+					func() CollectedField { return childField })
 				f.Selections = append(f.Selections, childField.Selections...)
+				if shouldDefer {
+					f.Deferrable = &Deferrable{Label: label}
+				}
 			}
 
 		default:
@@ -87,6 +112,7 @@ type CollectedField struct {
 	*ast.Field
 
 	Selections ast.SelectionSet
+	Deferrable *Deferrable
 }
 
 func instanceOf(val string, satisfies []string) bool {
@@ -98,7 +124,7 @@ func instanceOf(val string, satisfies []string) bool {
 	return false
 }
 
-func getOrCreateAndAppendField(c *[]CollectedField, name string, alias string, objectDefinition *ast.Definition, creator func() CollectedField) *CollectedField {
+func getOrCreateAndAppendField(c *[]CollectedField, name, alias string, objectDefinition *ast.Definition, creator func() CollectedField) *CollectedField {
 	for i, cf := range *c {
 		if cf.Name == name && cf.Alias == alias {
 			if cf.ObjectDefinition == objectDefinition {
@@ -132,7 +158,7 @@ func getOrCreateAndAppendField(c *[]CollectedField, name string, alias string, o
 	return &(*c)[len(*c)-1]
 }
 
-func shouldIncludeNode(directives ast.DirectiveList, variables map[string]interface{}) bool {
+func shouldIncludeNode(directives ast.DirectiveList, variables map[string]any) bool {
 	if len(directives) == 0 {
 		return true
 	}
@@ -150,7 +176,33 @@ func shouldIncludeNode(directives ast.DirectiveList, variables map[string]interf
 	return !skip && include
 }
 
-func resolveIfArgument(d *ast.Directive, variables map[string]interface{}) bool {
+func deferrable(directives ast.DirectiveList, variables map[string]any) (shouldDefer bool, label string) {
+	d := directives.ForName("defer")
+	if d == nil {
+		return false, ""
+	}
+
+	shouldDefer = true
+
+	for _, arg := range d.Arguments {
+		switch arg.Name {
+		case "if":
+			if value, err := arg.Value.Value(variables); err == nil {
+				shouldDefer, _ = value.(bool)
+			}
+		case "label":
+			if value, err := arg.Value.Value(variables); err == nil {
+				label, _ = value.(string)
+			}
+		default:
+			panic(fmt.Sprintf("defer: argument '%s' not supported", arg.Name))
+		}
+	}
+
+	return shouldDefer, label
+}
+
+func resolveIfArgument(d *ast.Directive, variables map[string]any) bool {
 	arg := d.Arguments.ForName("if")
 	if arg == nil {
 		panic(fmt.Sprintf("%s: argument 'if' not defined", d.Name))

@@ -14,6 +14,9 @@ type Stub struct {
 	BackedByInterfaceResolver struct {
 		ID func(ctx context.Context, obj BackedByInterface) (string, error)
 	}
+	DeferModelResolver struct {
+		Values func(ctx context.Context, obj *DeferModel) ([]string, error)
+	}
 	ErrorsResolver struct {
 		A func(ctx context.Context, obj *Errors) (*Error, error)
 		B func(ctx context.Context, obj *Errors) (*Error, error)
@@ -62,13 +65,17 @@ type Stub struct {
 		NullableArg                      func(ctx context.Context, arg *int) (*string, error)
 		InputSlice                       func(ctx context.Context, arg []string) (bool, error)
 		InputNullableSlice               func(ctx context.Context, arg []string) (bool, error)
+		InputOmittable                   func(ctx context.Context, arg OmittableInput) (string, error)
 		ShapeUnion                       func(ctx context.Context) (ShapeUnion, error)
 		Autobind                         func(ctx context.Context) (*Autobind, error)
 		DeprecatedField                  func(ctx context.Context) (string, error)
 		Overlapping                      func(ctx context.Context) (*OverlappingFields, error)
 		DefaultParameters                func(ctx context.Context, falsyBoolean *bool, truthyBoolean *bool) (*DefaultParametersMirror, error)
+		DeferSingle                      func(ctx context.Context) (*DeferModel, error)
+		DeferMultiple                    func(ctx context.Context) ([]*DeferModel, error)
 		DirectiveArg                     func(ctx context.Context, arg string) (*string, error)
 		DirectiveNullableArg             func(ctx context.Context, arg *int, arg2 *int, arg3 *string) (*string, error)
+		DirectiveSingleNullableArg       func(ctx context.Context, arg1 *string) (*string, error)
 		DirectiveInputNullable           func(ctx context.Context, arg *InputDirectives) (*string, error)
 		DirectiveInput                   func(ctx context.Context, arg InputDirectives) (*string, error)
 		DirectiveInputType               func(ctx context.Context, arg InnerInput) (*string, error)
@@ -97,9 +104,11 @@ type Stub struct {
 		ErrorList                        func(ctx context.Context) ([]*Error, error)
 		Errors                           func(ctx context.Context) (*Errors, error)
 		Valid                            func(ctx context.Context) (string, error)
+		Invalid                          func(ctx context.Context) (string, error)
 		Panics                           func(ctx context.Context) (*Panics, error)
 		PrimitiveObject                  func(ctx context.Context) ([]Primitive, error)
 		PrimitiveStringObject            func(ctx context.Context) ([]PrimitiveString, error)
+		PtrToAnyContainer                func(ctx context.Context) (*PtrToAnyContainer, error)
 		PtrToSliceContainer              func(ctx context.Context) (*PtrToSliceContainer, error)
 		Infinity                         func(ctx context.Context) (float64, error)
 		StringFromContextInterface       func(ctx context.Context) (*StringFromContextInterface, error)
@@ -146,6 +155,9 @@ type Stub struct {
 
 func (r *Stub) BackedByInterface() BackedByInterfaceResolver {
 	return &stubBackedByInterface{r}
+}
+func (r *Stub) DeferModel() DeferModelResolver {
+	return &stubDeferModel{r}
 }
 func (r *Stub) Errors() ErrorsResolver {
 	return &stubErrors{r}
@@ -198,6 +210,12 @@ type stubBackedByInterface struct{ *Stub }
 
 func (r *stubBackedByInterface) ID(ctx context.Context, obj BackedByInterface) (string, error) {
 	return r.BackedByInterfaceResolver.ID(ctx, obj)
+}
+
+type stubDeferModel struct{ *Stub }
+
+func (r *stubDeferModel) Values(ctx context.Context, obj *DeferModel) ([]string, error) {
+	return r.DeferModelResolver.Values(ctx, obj)
 }
 
 type stubErrors struct{ *Stub }
@@ -316,6 +334,9 @@ func (r *stubQuery) InputSlice(ctx context.Context, arg []string) (bool, error) 
 func (r *stubQuery) InputNullableSlice(ctx context.Context, arg []string) (bool, error) {
 	return r.QueryResolver.InputNullableSlice(ctx, arg)
 }
+func (r *stubQuery) InputOmittable(ctx context.Context, arg OmittableInput) (string, error) {
+	return r.QueryResolver.InputOmittable(ctx, arg)
+}
 func (r *stubQuery) ShapeUnion(ctx context.Context) (ShapeUnion, error) {
 	return r.QueryResolver.ShapeUnion(ctx)
 }
@@ -331,11 +352,20 @@ func (r *stubQuery) Overlapping(ctx context.Context) (*OverlappingFields, error)
 func (r *stubQuery) DefaultParameters(ctx context.Context, falsyBoolean *bool, truthyBoolean *bool) (*DefaultParametersMirror, error) {
 	return r.QueryResolver.DefaultParameters(ctx, falsyBoolean, truthyBoolean)
 }
+func (r *stubQuery) DeferSingle(ctx context.Context) (*DeferModel, error) {
+	return r.QueryResolver.DeferSingle(ctx)
+}
+func (r *stubQuery) DeferMultiple(ctx context.Context) ([]*DeferModel, error) {
+	return r.QueryResolver.DeferMultiple(ctx)
+}
 func (r *stubQuery) DirectiveArg(ctx context.Context, arg string) (*string, error) {
 	return r.QueryResolver.DirectiveArg(ctx, arg)
 }
 func (r *stubQuery) DirectiveNullableArg(ctx context.Context, arg *int, arg2 *int, arg3 *string) (*string, error) {
 	return r.QueryResolver.DirectiveNullableArg(ctx, arg, arg2, arg3)
+}
+func (r *stubQuery) DirectiveSingleNullableArg(ctx context.Context, arg1 *string) (*string, error) {
+	return r.QueryResolver.DirectiveSingleNullableArg(ctx, arg1)
 }
 func (r *stubQuery) DirectiveInputNullable(ctx context.Context, arg *InputDirectives) (*string, error) {
 	return r.QueryResolver.DirectiveInputNullable(ctx, arg)
@@ -421,6 +451,9 @@ func (r *stubQuery) Errors(ctx context.Context) (*Errors, error) {
 func (r *stubQuery) Valid(ctx context.Context) (string, error) {
 	return r.QueryResolver.Valid(ctx)
 }
+func (r *stubQuery) Invalid(ctx context.Context) (string, error) {
+	return r.QueryResolver.Invalid(ctx)
+}
 func (r *stubQuery) Panics(ctx context.Context) (*Panics, error) {
 	return r.QueryResolver.Panics(ctx)
 }
@@ -429,6 +462,9 @@ func (r *stubQuery) PrimitiveObject(ctx context.Context) ([]Primitive, error) {
 }
 func (r *stubQuery) PrimitiveStringObject(ctx context.Context) ([]PrimitiveString, error) {
 	return r.QueryResolver.PrimitiveStringObject(ctx)
+}
+func (r *stubQuery) PtrToAnyContainer(ctx context.Context) (*PtrToAnyContainer, error) {
+	return r.QueryResolver.PtrToAnyContainer(ctx)
 }
 func (r *stubQuery) PtrToSliceContainer(ctx context.Context) (*PtrToSliceContainer, error) {
 	return r.QueryResolver.PtrToSliceContainer(ctx)

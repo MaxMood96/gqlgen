@@ -6,7 +6,12 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+
+	"github.com/99designs/gqlgen/graphql"
+	"github.com/99designs/gqlgen/plugin/modelgen/internal/extrafields"
 )
+
+// Add any new functions or any additional code/template functionality here
 
 type A interface {
 	IsA()
@@ -74,7 +79,7 @@ type CDImplemented struct {
 	A string  `json:"a" database:"CDImplementeda"`
 	B int     `json:"b" database:"CDImplementedb"`
 	C bool    `json:"c" database:"CDImplementedc"`
-	D *string `json:"d" database:"CDImplementedd"`
+	D *string `json:"d,omitempty" database:"CDImplementedd"`
 }
 
 func (CDImplemented) IsC()              {}
@@ -91,30 +96,39 @@ func (this CDImplemented) GetD() *string { return this.D }
 func (CDImplemented) IsB() {}
 
 type CyclicalA struct {
-	FieldOne   *CyclicalB `json:"field_one" database:"CyclicalAfield_one"`
-	FieldTwo   *CyclicalB `json:"field_two" database:"CyclicalAfield_two"`
-	FieldThree *CyclicalB `json:"field_three" database:"CyclicalAfield_three"`
+	FieldOne   *CyclicalB `json:"field_one,omitempty" database:"CyclicalAfield_one"`
+	FieldTwo   *CyclicalB `json:"field_two,omitempty" database:"CyclicalAfield_two"`
+	FieldThree *CyclicalB `json:"field_three,omitempty" database:"CyclicalAfield_three"`
 	FieldFour  string     `json:"field_four" database:"CyclicalAfield_four"`
 }
 
 type CyclicalB struct {
-	FieldOne   *CyclicalA `json:"field_one" database:"CyclicalBfield_one"`
-	FieldTwo   *CyclicalA `json:"field_two" database:"CyclicalBfield_two"`
-	FieldThree *CyclicalA `json:"field_three" database:"CyclicalBfield_three"`
-	FieldFour  *CyclicalA `json:"field_four" database:"CyclicalBfield_four"`
+	FieldOne   *CyclicalA `json:"field_one,omitempty" database:"CyclicalBfield_one"`
+	FieldTwo   *CyclicalA `json:"field_two,omitempty" database:"CyclicalBfield_two"`
+	FieldThree *CyclicalA `json:"field_three,omitempty" database:"CyclicalBfield_three"`
+	FieldFour  *CyclicalA `json:"field_four,omitempty" database:"CyclicalBfield_four"`
 	FieldFive  string     `json:"field_five" database:"CyclicalBfield_five"`
 }
 
+type ExtraFieldsTest struct {
+	SchemaField   string  `json:"SchemaField" database:"ExtraFieldsTestSchemaField"`
+	FieldInt      int64   `json:"field_int_tag" database:"ExtraFieldsTestFieldInt"`
+	FieldIntSlice []int64 `json:"-" database:"ExtraFieldsTestFieldIntSlice"`
+	// Internal field
+	FieldInternalType extrafields.Type `json:"-" database:"ExtraFieldsTestFieldInternalType"`
+	FieldStringPtr    *string          `json:"-" database:"ExtraFieldsTestFieldStringPtr"`
+}
+
 type FieldMutationHook struct {
-	Name     *string       `anotherTag:"tag" json:"name" database:"FieldMutationHookname"`
-	Enum     *ExistingEnum `yetAnotherTag:"12" json:"enum" database:"FieldMutationHookenum"`
-	NoVal    *string       `yaml:"noVal" repeated:"true" json:"noVal" database:"FieldMutationHooknoVal"`
-	Repeated *string       `someTag:"value" repeated:"true" json:"repeated" database:"FieldMutationHookrepeated"`
+	Name     *string       `json:"name,omitempty" anotherTag:"tag" database:"FieldMutationHookname"`
+	Enum     *ExistingEnum `json:"enum,omitempty" yetAnotherTag:"12" database:"FieldMutationHookenum"`
+	NoVal    *string       `json:"noVal,omitempty" yaml:"noVal" repeated:"true" database:"FieldMutationHooknoVal"`
+	Repeated *string       `json:"repeated,omitempty" someTag:"value" repeated:"true" database:"FieldMutationHookrepeated"`
 }
 
 type ImplArrayOfA struct {
 	TrickyField        []*CDImplemented `json:"trickyField" database:"ImplArrayOfAtrickyField"`
-	TrickyFieldPointer []*CDImplemented `json:"trickyFieldPointer" database:"ImplArrayOfAtrickyFieldPointer"`
+	TrickyFieldPointer []*CDImplemented `json:"trickyFieldPointer,omitempty" database:"ImplArrayOfAtrickyFieldPointer"`
 }
 
 func (ImplArrayOfA) IsArrayOfA() {}
@@ -140,8 +154,12 @@ func (this ImplArrayOfA) GetTrickyFieldPointer() []A {
 }
 
 type MissingInput struct {
-	Name *string      `json:"name" database:"MissingInputname"`
-	Enum *MissingEnum `json:"enum" database:"MissingInputenum"`
+	Name          *string                           `json:"name,omitempty" database:"MissingInputname"`
+	Enum          *MissingEnum                      `json:"enum,omitempty" database:"MissingInputenum"`
+	NonNullString string                            `json:"nonNullString" database:"MissingInputnonNullString"`
+	NullString    graphql.Omittable[*string]        `json:"nullString,omitempty" database:"MissingInputnullString"`
+	NullEnum      graphql.Omittable[*MissingEnum]   `json:"nullEnum,omitempty" database:"MissingInputnullEnum"`
+	NullObject    graphql.Omittable[*ExistingInput] `json:"nullObject,omitempty" database:"MissingInputnullObject"`
 }
 
 type MissingTypeNotNull struct {
@@ -162,11 +180,11 @@ func (MissingTypeNotNull) IsMissingUnion() {}
 func (MissingTypeNotNull) IsExistingUnion() {}
 
 type MissingTypeNullable struct {
-	Name     *string             `json:"name" database:"MissingTypeNullablename"`
-	Enum     *MissingEnum        `json:"enum" database:"MissingTypeNullableenum"`
-	Int      MissingInterface    `json:"int" database:"MissingTypeNullableint"`
-	Existing *ExistingType       `json:"existing" database:"MissingTypeNullableexisting"`
-	Missing2 *MissingTypeNotNull `json:"missing2" database:"MissingTypeNullablemissing2"`
+	Name     *string             `json:"name,omitempty" database:"MissingTypeNullablename"`
+	Enum     *MissingEnum        `json:"enum,omitempty" database:"MissingTypeNullableenum"`
+	Int      MissingInterface    `json:"int,omitempty" database:"MissingTypeNullableint"`
+	Existing *ExistingType       `json:"existing,omitempty" database:"MissingTypeNullableexisting"`
+	Missing2 *MissingTypeNotNull `json:"missing2,omitempty" database:"MissingTypeNullablemissing2"`
 }
 
 func (MissingTypeNullable) IsMissingInterface()   {}
@@ -178,6 +196,9 @@ func (MissingTypeNullable) IsMissingUnion() {}
 
 func (MissingTypeNullable) IsExistingUnion() {}
 
+type Mutation struct {
+}
+
 type NotCyclicalA struct {
 	FieldOne string `json:"FieldOne" database:"NotCyclicalAFieldOne"`
 	FieldTwo int    `json:"FieldTwo" database:"NotCyclicalAFieldTwo"`
@@ -186,6 +207,14 @@ type NotCyclicalA struct {
 type NotCyclicalB struct {
 	FieldOne string        `json:"FieldOne" database:"NotCyclicalBFieldOne"`
 	FieldTwo *NotCyclicalA `json:"FieldTwo" database:"NotCyclicalBFieldTwo"`
+}
+
+type OmitEmptyJSONTagTest struct {
+	ValueNonNil string  `json:"ValueNonNil" database:"OmitEmptyJsonTagTestValueNonNil"`
+	Value       *string `json:"Value,omitempty" database:"OmitEmptyJsonTagTestValue"`
+}
+
+type Query struct {
 }
 
 type Recursive struct {
@@ -200,9 +229,12 @@ type RenameFieldTest struct {
 	OtherField string `json:"otherField" database:"RenameFieldTestotherField"`
 }
 
+type Subscription struct {
+}
+
 // TypeWithDescription is a type with a description
 type TypeWithDescription struct {
-	Name *string `json:"name" database:"TypeWithDescriptionname"`
+	Name *string `json:"name,omitempty" database:"TypeWithDescriptionname"`
 }
 
 func (TypeWithDescription) IsUnionWithDescription() {}
@@ -247,7 +279,7 @@ func (e EnumWithDescription) String() string {
 	return string(e)
 }
 
-func (e *EnumWithDescription) UnmarshalGQL(v interface{}) error {
+func (e *EnumWithDescription) UnmarshalGQL(v any) error {
 	str, ok := v.(string)
 	if !ok {
 		return fmt.Errorf("enums must be strings")
@@ -288,7 +320,7 @@ func (e MissingEnum) String() string {
 	return string(e)
 }
 
-func (e *MissingEnum) UnmarshalGQL(v interface{}) error {
+func (e *MissingEnum) UnmarshalGQL(v any) error {
 	str, ok := v.(string)
 	if !ok {
 		return fmt.Errorf("enums must be strings")

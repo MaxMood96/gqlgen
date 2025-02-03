@@ -12,12 +12,7 @@ import (
 	"github.com/99designs/gqlgen/graphql"
 )
 
-type (
-	Banned      bool
-	LoginBanned bool
-	QueryBanned = bool
-	Sum         uint16 // local named uint16
-)
+type Banned bool
 
 func (b Banned) MarshalGQL(w io.Writer) {
 	if b {
@@ -27,10 +22,10 @@ func (b Banned) MarshalGQL(w io.Writer) {
 	}
 }
 
-func (b *Banned) UnmarshalGQL(v interface{}) error {
+func (b *Banned) UnmarshalGQL(v any) error {
 	switch v := v.(type) {
 	case string:
-		*b = strings.ToLower(v) == "true"
+		*b = Banned(strings.EqualFold(v, "true"))
 		return nil
 	case bool:
 		*b = Banned(v)
@@ -41,26 +36,15 @@ func (b *Banned) UnmarshalGQL(v interface{}) error {
 }
 
 type User struct {
-	ID              external.ObjectID
-	Name            string
-	Created         time.Time  // direct binding to builtin types with external Marshal/Unmarshal methods
-	Modified        *time.Time // direct binding to builtin types with external Marshal/Unmarshal methods
-	ValPrefs        Prefs      // external un/marshal that act on pointers
-	PtrPrefs        *Prefs
-	IsBanned        Banned
-	IsLoginBanned   LoginBanned
-	IsQueryBanned   QueryBanned
-	Address         Address
-	Tier            Tier
-	CarManufacturer external.Manufacturer
-	Children        uint
-	Cars            external.Count
-	Weddings        Sum
-	SomeBytes       []byte
-	SomeOtherBytes  []byte
-	SomeRunes       []rune
-	RemoteBytes     external.ExternalBytes
-	RemoteRunes     external.ExternalRunes
+	ID       external.ObjectID
+	Name     string
+	Created  time.Time  // direct binding to builtin types with external Marshal/Unmarshal methods
+	Modified *time.Time // direct binding to builtin types with external Marshal/Unmarshal methods
+	ValPrefs Prefs      // external un/marshal that act on pointers
+	PtrPrefs *Prefs
+	IsBanned Banned
+	Address  Address
+	Tier     Tier
 }
 
 // Point is serialized as a simple array, eg [1, 2]
@@ -69,16 +53,16 @@ type Point struct {
 	Y int
 }
 
-func (p *Point) UnmarshalGQL(v interface{}) error {
+func (p *Point) UnmarshalGQL(v any) error {
 	pointStr, ok := v.(string)
 	if !ok {
-		return fmt.Errorf("points must be strings")
+		return errors.New("points must be strings")
 	}
 
 	parts := strings.Split(pointStr, ",")
 
 	if len(parts) != 2 {
-		return fmt.Errorf("points must have 2 parts")
+		return errors.New("points must have 2 parts")
 	}
 
 	var err error
@@ -106,7 +90,7 @@ func MarshalTimestamp(t time.Time) graphql.Marshaler {
 
 // Unmarshal{Typename} is only required if the scalar appears as an input. The raw values have already been decoded
 // from json into int/float64/bool/nil/map[string]interface/[]interface
-func UnmarshalTimestamp(v interface{}) (time.Time, error) {
+func UnmarshalTimestamp(v any) (time.Time, error) {
 	if tmpStr, ok := v.(int64); ok {
 		return time.Unix(tmpStr, 0), nil
 	}
@@ -121,10 +105,10 @@ func MarshalID(id external.ObjectID) graphql.Marshaler {
 }
 
 // And the same for the unmarshaler
-func UnmarshalID(v interface{}) (external.ObjectID, error) {
+func UnmarshalID(v any) (external.ObjectID, error) {
 	str, ok := v.(string)
 	if !ok {
-		return 0, fmt.Errorf("ids must be strings")
+		return 0, errors.New("ids must be strings")
 	}
 	i, err := strconv.Atoi(str[1 : len(str)-1])
 	return external.ObjectID(i), err
@@ -179,10 +163,10 @@ func (e Tier) String() string {
 	}
 }
 
-func (e *Tier) UnmarshalGQL(v interface{}) error {
+func (e *Tier) UnmarshalGQL(v any) error {
 	str, ok := v.(string)
 	if !ok {
-		return fmt.Errorf("enums must be strings")
+		return errors.New("enums must be strings")
 	}
 
 	var err error
@@ -202,29 +186,10 @@ func MarshalPreferences(p *Prefs) graphql.Marshaler {
 	return graphql.MarshalBoolean(p.DarkMode)
 }
 
-func UnmarshalPreferences(v interface{}) (*Prefs, error) {
+func UnmarshalPreferences(v any) (*Prefs, error) {
 	tmp, err := graphql.UnmarshalBoolean(v)
 	if err != nil {
 		return nil, err
 	}
 	return &Prefs{DarkMode: tmp}, nil
-}
-
-func MarshalRunes(r []rune) graphql.Marshaler {
-	return graphql.WriterFunc(func(w io.Writer) {
-		_, _ = fmt.Fprintf(w, "%q", string(r))
-	})
-}
-
-func UnmarshalRunes(v interface{}) ([]rune, error) {
-	switch v := v.(type) {
-	case string:
-		return []rune(v), nil
-	case *string:
-		return []rune(*v), nil
-	case []rune:
-		return v, nil
-	default:
-		return nil, fmt.Errorf("%T is not []rune", v)
-	}
 }

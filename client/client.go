@@ -11,14 +11,16 @@ import (
 	"net/http/httptest"
 	"regexp"
 
-	"github.com/mitchellh/mapstructure"
+	"github.com/go-viper/mapstructure/v2"
 )
 
 type (
 	// Client used for testing GraphQL servers. Not for production use.
 	Client struct {
-		h    http.Handler
-		opts []Option
+		h      http.Handler
+		dc     *mapstructure.DecoderConfig
+		opts   []Option
+		target string
 	}
 
 	// Option implements a visitor that mutates an outgoing GraphQL request
@@ -28,18 +30,18 @@ type (
 
 	// Request represents an outgoing GraphQL request
 	Request struct {
-		Query         string                 `json:"query"`
-		Variables     map[string]interface{} `json:"variables,omitempty"`
-		OperationName string                 `json:"operationName,omitempty"`
-		Extensions    map[string]interface{} `json:"extensions,omitempty"`
-		HTTP          *http.Request          `json:"-"`
+		Query         string         `json:"query"`
+		Variables     map[string]any `json:"variables,omitempty"`
+		OperationName string         `json:"operationName,omitempty"`
+		Extensions    map[string]any `json:"extensions,omitempty"`
+		HTTP          *http.Request  `json:"-"`
 	}
 
 	// Response is a GraphQL layer response from a handler.
 	Response struct {
-		Data       interface{}
+		Data       any
 		Errors     json.RawMessage
-		Extensions map[string]interface{}
+		Extensions map[string]any
 	}
 )
 
@@ -47,15 +49,16 @@ type (
 // Options can be set that should be applied to all requests made with this client
 func New(h http.Handler, opts ...Option) *Client {
 	p := &Client{
-		h:    h,
-		opts: opts,
+		h:      h,
+		opts:   opts,
+		target: "/",
 	}
 
 	return p
 }
 
 // MustPost is a convenience wrapper around Post that automatically panics on error
-func (p *Client) MustPost(query string, response interface{}, options ...Option) {
+func (p *Client) MustPost(query string, response any, options ...Option) {
 	if err := p.Post(query, response, options...); err != nil {
 		panic(err)
 	}
@@ -63,14 +66,14 @@ func (p *Client) MustPost(query string, response interface{}, options ...Option)
 
 // Post sends a http POST request to the graphql endpoint with the given query then unpacks
 // the response into the given object.
-func (p *Client) Post(query string, response interface{}, options ...Option) error {
+func (p *Client) Post(query string, response any, options ...Option) error {
 	respDataRaw, err := p.RawPost(query, options...)
 	if err != nil {
 		return err
 	}
 
 	// we want to unpack even if there is an error, so we can see partial responses
-	unpackErr := unpack(respDataRaw.Data, response)
+	unpackErr := unpack(respDataRaw.Data, response, p.dc)
 
 	if respDataRaw.Errors != nil {
 		return RawJsonError{respDataRaw.Errors}
@@ -105,10 +108,12 @@ func (p *Client) RawPost(query string, options ...Option) (*Response, error) {
 	return respDataRaw, nil
 }
 
+var boundaryRegex = regexp.MustCompile(`multipart/form-data; ?boundary=.*`)
+
 func (p *Client) newRequest(query string, options ...Option) (*http.Request, error) {
 	bd := &Request{
 		Query: query,
-		HTTP:  httptest.NewRequest(http.MethodPost, "/", nil),
+		HTTP:  httptest.NewRequest(http.MethodPost, p.target, http.NoBody),
 	}
 	bd.HTTP.Header.Set("Content-Type", "application/json")
 
@@ -123,9 +128,9 @@ func (p *Client) newRequest(query string, options ...Option) (*http.Request, err
 
 	contentType := bd.HTTP.Header.Get("Content-Type")
 	switch {
-	case regexp.MustCompile(`multipart/form-data; ?boundary=.*`).MatchString(contentType):
+	case boundaryRegex.MatchString(contentType):
 		break
-	case "application/json" == contentType:
+	case contentType == "application/json":
 		requestBody, err := json.Marshal(bd)
 		if err != nil {
 			return nil, fmt.Errorf("encode: %w", err)
@@ -138,13 +143,28 @@ func (p *Client) newRequest(query string, options ...Option) (*http.Request, err
 	return bd.HTTP, nil
 }
 
-func unpack(data interface{}, into interface{}) error {
-	d, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		Result:      into,
+// SetCustomDecodeConfig sets a custom decode hook for the client
+func (p *Client) SetCustomDecodeConfig(dc *mapstructure.DecoderConfig) {
+	p.dc = dc
+}
+
+// SetCustomTarget sets a custom target path for the client
+func (p *Client) SetCustomTarget(target string) {
+	p.target = target
+}
+
+func unpack(data, into any, customDc *mapstructure.DecoderConfig) error {
+	dc := &mapstructure.DecoderConfig{
 		TagName:     "json",
 		ErrorUnused: true,
 		ZeroFields:  true,
-	})
+	}
+	if customDc != nil {
+		dc = customDc
+	}
+	dc.Result = into
+
+	d, err := mapstructure.NewDecoder(dc)
 	if err != nil {
 		return fmt.Errorf("mapstructure: %w", err)
 	}
